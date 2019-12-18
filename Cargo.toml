@@ -1,0 +1,8 @@
+[package]
+name = "advent-of-code-2019"
+version = "0.1.0"
+authors = ["James MacMahon <jwm@operand.ca>"]
+edition = "2018"
+
+[dependencies]
+
