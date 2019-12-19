@@ -60,6 +60,22 @@ fn test_get_repeating_pattern() {
     assert_eq!(get_repeating_pattern(3), vec![0, 0, 1, 1, 1, 0, 0, 0, -1, -1, -1, 0]);
 }
 
+fn get_repeating_pattern_v2(index: usize, pos: usize) -> i32 {
+    let base_pattern: Vec<i32> = vec![0, 1, 0, -1];
+    let modulus : usize = (pos + 1) / index;
+    return base_pattern[modulus % base_pattern.len()];
+}
+
+#[test]
+fn test_get_repeating_pattern_v2() {
+    for i in 1..3 {
+        let pattern = get_repeating_pattern(i);
+        for j in 0..pattern.len() {
+            assert_eq!(get_repeating_pattern_v2(i as usize, j), pattern[j as usize]);
+        }
+    }
+}
+
 fn apply_repeating_pattern(input: Vec<i32>, pattern: Vec<i32>) -> i32 {
     let mut output: i32 = 0;
 
