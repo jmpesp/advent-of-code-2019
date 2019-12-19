@@ -76,11 +76,11 @@ fn test_get_repeating_pattern_v2() {
     }
 }
 
-fn apply_repeating_pattern(input: Vec<i32>, pattern: Vec<i32>) -> i32 {
+fn apply_repeating_pattern(input: Vec<i32>, index: u32) -> i32 {
     let mut output: i32 = 0;
 
     for i in 0..input.len() {
-        output += input[i] * pattern[i % pattern.len()];
+        output += input[i] * get_repeating_pattern_v2(index as usize, i)
     }
 
     return output.abs() % 10;
@@ -88,14 +88,14 @@ fn apply_repeating_pattern(input: Vec<i32>, pattern: Vec<i32>) -> i32 {
 
 #[test]
 fn test_apply_repeating_pattern() {
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], get_repeating_pattern(1)), 4);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], get_repeating_pattern(2)), 8);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], get_repeating_pattern(3)), 2);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], get_repeating_pattern(4)), 2);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], get_repeating_pattern(5)), 6);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], get_repeating_pattern(6)), 1);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], get_repeating_pattern(7)), 5);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], get_repeating_pattern(8)), 8);
+    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 1), 4);
+    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 2), 8);
+    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 3), 2);
+    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 4), 2);
+    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 5), 6);
+    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 6), 1);
+    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 7), 5);
+    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 8), 8);
 }
 
 fn fft(input: Vec<i32>, phases: i32) -> Vec<i32> {
@@ -104,7 +104,7 @@ fn fft(input: Vec<i32>, phases: i32) -> Vec<i32> {
     for _phase in 0..phases {
         output = output.iter()
                        .enumerate()
-                       .map(|s| apply_repeating_pattern(output.clone(), get_repeating_pattern((s.0 + 1) as u32)))
+                       .map(|s| apply_repeating_pattern(output.clone(), (s.0 + 1) as u32))
                        .collect();
     }
 
