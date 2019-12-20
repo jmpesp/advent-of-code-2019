@@ -76,36 +76,24 @@ fn test_get_repeating_pattern_v2() {
     }
 }
 
-fn apply_repeating_pattern(input: Vec<i32>, index: u32) -> i32 {
-    let mut output: i32 = 0;
-
-    for i in 0..input.len() {
-        output += input[i] * get_repeating_pattern_v2(index as usize, i)
-    }
-
-    return output.abs() % 10;
-}
-
-#[test]
-fn test_apply_repeating_pattern() {
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 1), 4);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 2), 8);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 3), 2);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 4), 2);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 5), 6);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 6), 1);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 7), 5);
-    assert_eq!(apply_repeating_pattern(vec![1, 2, 3, 4, 5, 6, 7, 8], 8), 8);
-}
-
 fn fft(input: Vec<i32>, phases: i32) -> Vec<i32> {
     let mut output: Vec<i32> = input.clone();
 
     for _phase in 0..phases {
-        output = output.iter()
-                       .enumerate()
-                       .map(|s| apply_repeating_pattern(output.clone(), (s.0 + 1) as u32))
-                       .collect();
+        let mut inner: Vec<i32> = Vec::with_capacity(output.len());
+        inner.resize(output.len(), 0);
+
+        for index in (0..(output.len())).rev() {
+            let mut v = 0;
+
+            for pos in index..output.len() {
+                v += output[pos] * get_repeating_pattern_v2(index + 1, pos);
+            }
+
+            inner[index] = v.abs() % 10;
+        }
+
+        output = inner;
     }
 
     return output;
@@ -113,7 +101,16 @@ fn fft(input: Vec<i32>, phases: i32) -> Vec<i32> {
 
 #[test]
 fn test_fft() {
-    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4), vec![0, 1, 0, 2, 9, 4, 9, 8])
+    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4), vec![0, 1, 0, 2, 9, 4, 9, 8]);
+
+    assert_eq!(fft(vec![8, 0, 8, 7, 1, 2, 2, 4, 5, 8, 5, 9, 1, 4, 5, 4, 6, 6, 1, 9, 0, 8, 3, 2, 1, 8, 6, 4, 5, 5, 9, 5], 100),
+                   vec![2, 4, 1, 7, 6, 1, 7, 6, 4, 8, 0, 9, 1, 9, 0, 4, 6, 1, 1, 4, 0, 3, 8, 7, 6, 3, 1, 9, 5, 5, 9, 5]);
+
+    assert_eq!(fft(vec![1, 9, 6, 1, 7, 8, 0, 4, 2, 0, 7, 2, 0, 2, 2, 0, 9, 1, 4, 4, 9, 1, 6, 0, 4, 4, 1, 8, 9, 9, 1, 7], 100),
+                   vec![7, 3, 7, 4, 5, 4, 1, 8, 5, 5, 7, 2, 5, 7, 2, 5, 9, 1, 4, 9, 4, 6, 6, 5, 9, 9, 6, 3, 9, 9, 1, 7]);
+
+    assert_eq!(fft(vec![6, 9, 3, 1, 7, 1, 6, 3, 4, 9, 2, 9, 4, 8, 6, 0, 6, 3, 3, 5, 9, 9, 5, 9, 2, 4, 3, 1, 9, 8, 7, 3], 100),
+                   vec![5, 2, 4, 3, 2, 1, 3, 3, 2, 9, 2, 9, 9, 8, 6, 0, 6, 8, 8, 0, 4, 9, 5, 9, 7, 4, 8, 6, 9, 8, 7, 3]);
 }
 
 fn main() {
