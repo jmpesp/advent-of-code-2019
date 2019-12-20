@@ -86,8 +86,13 @@ fn fft(input: Vec<i32>, phases: i32) -> Vec<i32> {
         for index in (0..(output.len())).rev() {
             let mut v = 0;
 
-            for pos in index..output.len() {
-                v += output[pos] * get_repeating_pattern_v2(index + 1, pos);
+            for mut pos in index..output.len() {
+                let p = get_repeating_pattern_v2(index + 1, pos);
+                if p == 0 {
+                    pos += index;
+                    continue;
+                }
+                v += output[pos] * p;
             }
 
             inner[index] = v.abs() % 10;
