@@ -66,7 +66,7 @@ fn test_intcode_program() {
 
 fn main() {
     let reader = io::stdin();
-    let mut numbers: Vec<i32> =
+    let numbers: Vec<i32> =
         reader.lock()
               .lines().next().unwrap().unwrap()
               .split(",")
@@ -80,9 +80,29 @@ fn main() {
     // with the value 12 and replace position 2 with the value 2. What
     // value is left at position 0 after the program halts?
 
-    numbers[1] = 12;
-    numbers[2] = 2;
+    // part 2:
 
-    let output = intcode_program(numbers, 0);
-    println!("{}", output[0]);
+    // determine what pair of inputs produces the output 19690720
+
+    // The inputs should still be provided to the program by replacing
+    // the values at addresses 1 and 2, just like before. In this
+    // program, the value placed in address 1 is called the noun, and
+    // the value placed in address 2 is called the verb.
+
+    // What is 100 * noun + verb?
+
+    for i in 0..99 {
+        for j in 0..99 {
+            let mut input : Vec<i32> = numbers.clone();
+
+            input[1] = i;
+            input[2] = j;
+
+            let output = intcode_program(input, 0);
+
+            if output[0] == 19690720 {
+                println!("{} {} {}", i, j, 100 * i + j);
+            }
+        }
+    }
 }
