@@ -76,14 +76,55 @@ fn test_get_repeating_pattern_v2() {
     }
 }
 
-fn fft(input: Vec<i32>, phases: i32) -> Vec<i32> {
+fn fft(input: Vec<i32>, phases: i32, message_offset: usize) -> Vec<i32> {
     let mut output: Vec<i32> = input.clone();
 
+    /*
+    // part 2:
+    //
+    // for high index, last column doesn't change!
+    //
+    // if sufficiently high in list, can approximate:
+    // n1 + n2 + n3 + n4 = v4 = v3 + n1
+    //  0 + n2 + n3 + n4 = v3 = v2 + n2
+    //  0 +  0 + n3 + n4 = v2 = v1 + n3
+    //  0 +  0 +  0 + n4 = v1 = n4
+
+    // this should work up to the half way point + 1
+    // reason is that length = N, index (N / 2) + 1 is
+    // 000000000000000000000011111111111111111111111111
+    // and shifts over to 1 at half way point
+
+    // so throw out the pattern stuff and simply add (abs mod 10)
+
+    assert!(message_offset > (output.len() / 2));
+
+    let min = message_offset;
+    let max = output.len();
+
+    for _phase in 0..phases {
+        println!("{}", _phase);
+        for index in (min..(max - 1)).rev() {
+            output[index] = (output[index] + output[index + 1]).abs() % 10;
+        }
+    }
+
+    return output;
+    */
+
+    // part 1:
     for _phase in 0..phases {
         let mut inner: Vec<i32> = Vec::with_capacity(output.len());
         inner.resize(output.len(), 0);
 
-        for index in (0..(output.len())).rev() {
+        let mut min = 0;
+        let max = output.len();
+
+        if message_offset != 0 {
+            min = message_offset;
+        }
+
+        for index in (min..max).rev() {
             let mut v = 0;
 
             for mut pos in index..output.len() {
@@ -106,16 +147,28 @@ fn fft(input: Vec<i32>, phases: i32) -> Vec<i32> {
 
 #[test]
 fn test_fft() {
-    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4), vec![0, 1, 0, 2, 9, 4, 9, 8]);
+    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4, 0), vec![0, 1, 0, 2, 9, 4, 9, 8]);
 
-    assert_eq!(fft(vec![8, 0, 8, 7, 1, 2, 2, 4, 5, 8, 5, 9, 1, 4, 5, 4, 6, 6, 1, 9, 0, 8, 3, 2, 1, 8, 6, 4, 5, 5, 9, 5], 100),
+    assert_eq!(fft(vec![8, 0, 8, 7, 1, 2, 2, 4, 5, 8, 5, 9, 1, 4, 5, 4, 6, 6, 1, 9, 0, 8, 3, 2, 1, 8, 6, 4, 5, 5, 9, 5], 100, 0),
                    vec![2, 4, 1, 7, 6, 1, 7, 6, 4, 8, 0, 9, 1, 9, 0, 4, 6, 1, 1, 4, 0, 3, 8, 7, 6, 3, 1, 9, 5, 5, 9, 5]);
 
-    assert_eq!(fft(vec![1, 9, 6, 1, 7, 8, 0, 4, 2, 0, 7, 2, 0, 2, 2, 0, 9, 1, 4, 4, 9, 1, 6, 0, 4, 4, 1, 8, 9, 9, 1, 7], 100),
+    assert_eq!(fft(vec![1, 9, 6, 1, 7, 8, 0, 4, 2, 0, 7, 2, 0, 2, 2, 0, 9, 1, 4, 4, 9, 1, 6, 0, 4, 4, 1, 8, 9, 9, 1, 7], 100, 0),
                    vec![7, 3, 7, 4, 5, 4, 1, 8, 5, 5, 7, 2, 5, 7, 2, 5, 9, 1, 4, 9, 4, 6, 6, 5, 9, 9, 6, 3, 9, 9, 1, 7]);
 
-    assert_eq!(fft(vec![6, 9, 3, 1, 7, 1, 6, 3, 4, 9, 2, 9, 4, 8, 6, 0, 6, 3, 3, 5, 9, 9, 5, 9, 2, 4, 3, 1, 9, 8, 7, 3], 100),
+    assert_eq!(fft(vec![6, 9, 3, 1, 7, 1, 6, 3, 4, 9, 2, 9, 4, 8, 6, 0, 6, 3, 3, 5, 9, 9, 5, 9, 2, 4, 3, 1, 9, 8, 7, 3], 100, 0),
                    vec![5, 2, 4, 3, 2, 1, 3, 3, 2, 9, 2, 9, 9, 8, 6, 0, 6, 8, 8, 0, 4, 9, 5, 9, 7, 4, 8, 6, 9, 8, 7, 3]);
+
+    // test message stuff
+    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4, 1), vec![0, 1, 0, 2, 9, 4, 9, 8]);
+    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4, 2), vec![0, 0, 0, 2, 9, 4, 9, 8]);
+    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4, 3), vec![0, 0, 0, 2, 9, 4, 9, 8]);
+    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4, 4), vec![0, 0, 0, 0, 9, 4, 9, 8]);
+    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4, 5), vec![0, 0, 0, 0, 0, 4, 9, 8]);
+    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4, 6), vec![0, 0, 0, 0, 0, 0, 9, 8]);
+    assert_eq!(fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4, 7), vec![0, 0, 0, 0, 0, 0, 0, 8]);
+
+    let val = fft(vec![1, 2, 3, 4, 5, 6, 7, 8], 4, 3);
+    assert_eq!(val[3..5].to_vec(), vec![2, 9]);
 }
 
 fn main() {
@@ -127,11 +180,32 @@ fn main() {
               .map(|s| s.1.to_digit(10).expect("could not turn into digit!") as i32)
               .collect();
 
-    //println!("Input is {} characters: {:?}", numbers.len(), numbers);
+    let mut part_2_numbers: Vec<i32> = vec![];
+    for _i in 0..10000 {
+        part_2_numbers.append(&mut numbers.clone());
+    }
+    let numbers = part_2_numbers;
 
-    let output: Vec<String> = fft(numbers, 100).iter()
-                                               .map(|s| s.to_string())
-                                               .collect();
+    // The first seven digits of your initial input signal also
+    // represent the message offset. The message offset is the location
+    // of the eight-digit message in the final output list.
+    // Specifically, the message offset indicates the number of digits
+    // to skip before reading the eight-digit message.
 
-    println!("{:?}", output.join(""))
+    let message_offset : usize = (numbers[0] as usize) * 1000000 +
+                                 (numbers[1] as usize) * 100000 +
+                                 (numbers[2] as usize) * 10000 +
+                                 (numbers[3] as usize) * 1000 +
+                                 (numbers[4] as usize) * 100 +
+                                 (numbers[5] as usize) * 10 +
+                                 (numbers[6] as usize) * 1;
+
+    let output: Vec<String> = numbers.iter().map(|s| s.to_string()).collect();
+    //println!("Input is {} characters: {:?}", numbers.len(), output.join(""));
+
+    let output: Vec<String> = fft(numbers, 100, message_offset).iter()
+                                                               .map(|s| s.to_string())
+                                                               .collect();
+
+    println!("{:?}", output[message_offset..message_offset+8].join(""))
 }
