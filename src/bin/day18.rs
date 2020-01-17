@@ -87,7 +87,10 @@ impl Maze {
     fn letters(&self, v: Vec<NodeIndex<DefaultIx>>) -> HashSet<String> {
         let mut output: HashSet<String> = HashSet::new();
         for i in v {
-            output.insert(self.graph.node_weight(i).unwrap().c.clone());
+            let node: &Node = self.graph.node_weight(i).unwrap();
+            if node.c.chars().next().unwrap().is_alphabetic() {
+                output.insert(node.c.clone());
+            }
         }
         return output;
     }
