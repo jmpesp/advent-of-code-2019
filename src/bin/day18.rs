@@ -130,6 +130,8 @@ fn test_letters() {
 
     let (door_nodes, key_nodes) = visible_doors_and_keys(maze_2.node_index(8, 4), &maze_2.graph);
 
+    assert_eq!(DoorNodes::new(), door_nodes);
+
     let expected_key_nodes: HashSet<String> =
         HashSet::from_iter(
             vec!["a", "b", "c", "d", "e", "f", "g", "h"]
