@@ -91,6 +91,16 @@ impl Maze {
         }
         return output;
     }
+
+    fn find_start_index(&self) -> Option<NodeIndex<DefaultIx>> {
+        for node_index in self.graph.node_indices() {
+            let node = self.graph.node_weight(node_index).unwrap();
+            if node.c == "@" {
+                return Some(node.index);
+            }
+        }
+        return None
+    }
 }
 
 #[test]
@@ -118,6 +128,24 @@ fn test_letters() {
         );
 
     assert_eq!(maze_2.letters(key_nodes), expected_key_nodes);
+}
+
+#[test]
+fn test_find_start_index() {
+    let raw_map: Vec<Vec<char>> =
+        vec!["#################".chars().collect(),
+             "#i.G..c...e..H.p#".chars().collect(),
+             "########.########".chars().collect(),
+             "#j.A..b...f..D.o#".chars().collect(),
+             "########@########".chars().collect(),
+             "#k.E..a...g..B.n#".chars().collect(),
+             "########.########".chars().collect(),
+             "#l.F..d...h..C.m#".chars().collect(),
+             "#################".chars().collect()];
+
+    let maze = get_lines_as_maze(raw_map);
+
+    assert_eq!(maze.find_start_index().unwrap(), maze.node_index(8, 4));
 }
 
 fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
