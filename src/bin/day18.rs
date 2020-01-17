@@ -6,6 +6,7 @@ use std::iter::FromIterator;
 
 use petgraph::Graph;
 use petgraph::graph::{DefaultIx, NodeIndex};
+use petgraph::algo::{dijkstra};
 use petgraph::dot::{Dot, Config};
 
 #[derive(Debug)]
@@ -103,6 +104,12 @@ impl Maze {
             }
         }
         return None
+    }
+
+    fn steps(&self, i: NodeIndex<DefaultIx>, j: NodeIndex<DefaultIx>) -> usize {
+        let result: HashMap<NodeIndex<DefaultIx>, usize> =
+            dijkstra(&self.graph, i, Some(j), |_| 1);
+        return *result.get(&j).unwrap();
     }
 }
 
