@@ -9,7 +9,7 @@ use petgraph::graph::{DefaultIx, NodeIndex};
 use petgraph::algo::{dijkstra};
 use petgraph::dot::{Dot, Config};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Node {
     x: usize,
     y: usize,
@@ -110,6 +110,20 @@ impl Maze {
         let result: HashMap<NodeIndex<DefaultIx>, usize> =
             dijkstra(&self.graph, i, Some(j), |_| 1);
         return *result.get(&j).unwrap();
+    }
+
+    fn grab(&mut self, i: NodeIndex<DefaultIx>) -> String {
+        let node = self.graph.node_weight_mut(i).unwrap();
+
+        let result = node.c.clone();
+        node.c = ".".to_string();
+
+        return result;
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.graph = source.graph.clone();
+        self.nodes_map = source.nodes_map.clone();
     }
 }
 
@@ -253,7 +267,82 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
         }
     }
 
+    // TODO: simplify maze!
+
     return maze;
+}
+
+fn collect_all(maze: &Maze) -> usize {
+    return collect_all_given(maze,
+                             maze.find_start_index().unwrap());
+}
+
+fn collect_all_given(maze: &Maze,
+                     index: NodeIndex<DefaultIx>) -> usize {
+
+    let mut steps: usize = 0;
+
+    // what do I have already?
+
+    // what can I collect?
+    let (_, key_nodes) = visible_doors_and_keys(index, &maze.graph);
+
+    for key in key_nodes {
+        // if I choose to go for this key
+
+        let key_node = maze.graph.node_weight(key).unwrap();
+
+        let mut new_maze: Maze = Maze {
+            graph: Graph::new(),
+            nodes_map: HashMap::new(),
+        };
+        new_maze.clone_from(maze);
+
+        new_maze.grab(key);
+
+        // if I choose something, then open all doors it points to
+
+        for door in maze.graph.node_indices() {
+            let door_node = maze.graph.node_weight(door).unwrap();
+            if door_node.c.to_lowercase() == key_node.c {
+                new_maze.grab(door);
+            }
+        }
+
+        let inner_steps = maze.steps(index, key) + collect_all_given(&new_maze, key);
+
+        if (steps == 0) || (inner_steps < steps) {
+            steps = inner_steps;
+        }
+    }
+
+    return steps;
+}
+
+#[test]
+fn test_test1() {
+    let raw_map: Vec<Vec<char>> =
+        vec!["#########".chars().collect(),
+             "#b.A.@.a#".chars().collect(),
+             "#########".chars().collect()];
+
+    let maze = get_lines_as_maze(raw_map);
+
+    assert_eq!(collect_all(&maze), 8);
+}
+
+#[test]
+fn test_test2() {
+    let raw_map: Vec<Vec<char>> =
+        vec!["########################".chars().collect(),
+             "#f.D.E.e.C.b.A.@.a.B.c.#".chars().collect(),
+             "######################.#".chars().collect(),
+             "#d.....................#".chars().collect(),
+             "########################".chars().collect()];
+
+    let maze = get_lines_as_maze(raw_map);
+
+    assert_eq!(collect_all(&maze), 86);
 }
 
 fn main() {
@@ -271,4 +360,6 @@ fn main() {
 
     let mut file = File::create("graph.dot").expect("failed to create graph.dot");
     file.write(&text.into_bytes()).expect("could not write into graph.dot");
+
+    println!("{} steps", collect_all(&maze));
 }
