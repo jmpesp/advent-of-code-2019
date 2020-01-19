@@ -124,7 +124,7 @@ impl Maze {
 
     fn steps(&self, i: NodeIndex<DefaultIx>, j: NodeIndex<DefaultIx>) -> usize {
         let result: HashMap<NodeIndex<DefaultIx>, usize> =
-            dijkstra(&self.graph, i, Some(j), |_| 1);
+            dijkstra(&self.graph, i, Some(j), |e| *e.weight());
         return *result.get(&j).unwrap();
     }
 
