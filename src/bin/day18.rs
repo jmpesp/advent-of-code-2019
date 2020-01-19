@@ -1,13 +1,15 @@
 use std::io::{self, BufRead, Write};
 use std::fs::File;
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque, BinaryHeap};
 use std::iter::FromIterator;
+use std::cmp::Ordering;
 
 use petgraph::Graph;
 use petgraph::graph::{DefaultIx, NodeIndex};
 use petgraph::algo::{dijkstra};
 use petgraph::dot::{Dot, Config};
+
 
 #[derive(Debug, Clone)]
 struct Node {
@@ -94,6 +96,8 @@ fn test_visible_doors_and_keys() {
 struct Maze {
     graph: Graph<Node, usize>,
     nodes_map: HashMap<usize, HashMap<usize, NodeIndex<DefaultIx>>>,
+    rows: usize,
+    cols: usize,
 }
 
 impl Maze {
@@ -137,9 +141,42 @@ impl Maze {
         return result;
     }
 
-    fn clone_from(&mut self, source: &Self) {
+    fn new() -> Maze {
+        return Maze {
+            graph: Graph::new(),
+            nodes_map: HashMap::new(),
+            rows: 0,
+            cols: 0
+        };
+    }
+
+    fn clone_from(&mut self, source: &Self) -> &mut Maze {
         self.graph = source.graph.clone();
         self.nodes_map = source.nodes_map.clone();
+        self.rows = source.rows;
+        self.cols = source.cols;
+        return self;
+    }
+
+    fn print(&self) {
+        for y in 1..(self.rows-1) {
+            match self.nodes_map.get(&y) {
+                Some(r) => {
+                    for x in 1..(self.cols-1) {
+                        match r.get(&x) {
+                            Some(c) => print!("{}", self.graph.node_weight(self.node_index(x, y)).unwrap().c),
+                            None => print!("#"),
+                        }
+                    }
+                },
+                None => {
+                    for x in 1..(self.cols-1) {
+                        print!("#");
+                    }
+                },
+            }
+            println!("");
+        }
     }
 }
 
@@ -201,6 +238,8 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
     let mut maze: Maze = Maze{
         graph: Graph::new(),
         nodes_map: HashMap::new(),
+        rows: rows,
+        cols: cols,
     };
 
     // add nodes
@@ -222,12 +261,16 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
         print!("\n");
     }
 
-    for node_index in maze.graph.node_indices() {
-        let node = maze.graph.node_weight_mut(node_index).unwrap();
-        node.index = node_index;
+    for ix in maze.graph.node_indices() {
+        let node = maze.graph.node_weight_mut(ix).unwrap();
+        node.index = ix;
+
+        if node.c == "." {
+            node.c = " ".to_string();
+        }
 
         maze.nodes_map.entry(node.y).or_insert(HashMap::new());
-        maze.nodes_map.get_mut(&node.y).unwrap().entry(node.x).or_insert(node_index);
+        maze.nodes_map.get_mut(&node.y).unwrap().entry(node.x).or_insert(ix);
 
         println!("y {} x {} {:?}", node.y, node.x, node);
     }
@@ -283,56 +326,183 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
         }
     }
 
-    // TODO: simplify maze!
+    // TODO: simplify maze?
 
     return maze;
 }
 
 fn collect_all(maze: &Maze) -> usize {
-    return collect_all_given(maze,
-                             maze.find_start_index().unwrap());
+    return collect_all_given(maze).unwrap();
 }
 
-fn collect_all_given(maze: &Maze,
-                     index: NodeIndex<DefaultIx>) -> usize {
+struct Search {
+    maze: Maze,
+    index: NodeIndex<DefaultIx>,
+    path_length: usize,
+    cost: i32,
+    depth: usize,
+}
 
-    let mut steps: usize = 0;
+impl Ord for Search {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.cost.cmp(&other.cost)
+    }
+}
 
-    // what do I have already?
+impl PartialOrd for Search {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
-    // what can I collect?
-    let (_, key_nodes) = visible_doors_and_keys(index, &maze.graph);
+impl PartialEq for Search {
+    fn eq(&self, other: &Self) -> bool {
+        self.cost == other.cost
+    }
+}
 
-    for key in key_nodes {
-        // if I choose to go for this key
+impl Eq for Search {}
 
-        let key_node = maze.graph.node_weight(key).unwrap();
+fn collect_all_given(amaze: &Maze) -> Option<usize> {
 
-        let mut new_maze: Maze = Maze {
-            graph: Graph::new(),
-            nodes_map: HashMap::new(),
-        };
-        new_maze.clone_from(maze);
+    // make sure cost is negative - this makes this a min heap
+    let mut search_space: BinaryHeap<Search> = BinaryHeap::new();
 
-        new_maze.grab(key);
+    {
+        let mut new_maze: Maze = Maze::new();
+        new_maze.clone_from(amaze);
 
-        // if I choose something, then open all doors it points to
+        search_space.push(
+            Search{
+                maze: new_maze,
+                index: amaze.find_start_index().unwrap(),
+                path_length: 0,
+                cost: 0,
+                depth: 0,
+            }
+        );
+    }
+    let mut best_path: Option<usize> = None;
 
-        for door in maze.graph.node_indices() {
-            let door_node = maze.graph.node_weight(door).unwrap();
-            if door_node.c.to_lowercase() == key_node.c {
-                new_maze.grab(door);
+    while !search_space.is_empty() {
+        // pop off best search so far
+        let current_search = search_space.pop().unwrap();
+
+        // if the best path is known, then ignore items that exceed it
+        match best_path {
+            Some(i) => {
+                /*println!("length {} best {} current {} cost {} depth {}",
+                    search_space.len(),
+                    i,
+                    current_search.path_length,
+                    current_search.cost,
+                    current_search.depth,
+                );*/
+
+                if current_search.path_length >= i {
+                    //println!("!");
+                    continue;
+                }
+            },
+            None => {},
+        }
+
+        //current_search.maze.print();
+
+        // what can I collect?
+        let (_, key_nodes) = visible_doors_and_keys(current_search.index, &current_search.maze.graph);
+
+        // BUT are there any keys left in the maze?
+        let mut keys_left: i32 = 0;
+        let mut doors_left: i32 = 0;
+
+        for ix in current_search.maze.graph.node_indices() {
+            let node = current_search.maze.graph.node_weight(ix).unwrap();
+            if node.is_key() {
+                keys_left += 1;
+            }
+            if node.is_door() {
+                doors_left += 1;
             }
         }
 
-        let inner_steps = maze.steps(index, key) + collect_all_given(&new_maze, key);
+        if keys_left == 0 {
+            // update best_path
+            match best_path {
+                Some(i) => {
+                    if current_search.path_length < i {
+                        //println!("update {}", current_search.path_length);
+                        best_path = Some(current_search.path_length);
+                    }
+                },
+                None => {
+                    //println!("new {}", current_search.path_length);
+                    best_path = Some(current_search.path_length);
+                },
+            }
 
-        if (steps == 0) || (inner_steps < steps) {
-            steps = inner_steps;
+            continue;
+        }
+
+        for key in key_nodes {
+            let key_node = current_search.maze.graph.node_weight(key).unwrap();
+
+            let mut new_maze: Maze = Maze::new();
+            new_maze.clone_from(&current_search.maze);
+
+            new_maze.grab(key);
+
+            // if I choose something, then open all doors it points to in the whole map
+            for ix in new_maze.graph.node_indices() {
+                let node = new_maze.graph.node_weight(ix).unwrap();
+                if node.is_door() && node.key_opens(&key_node.c) {
+                    new_maze.grab(ix);
+                }
+            }
+
+            //println!("pushing:");
+            //new_maze.print();
+
+            let new_path_length = current_search.path_length + current_search.maze.steps(current_search.index, key);
+
+            // a heuristic function that estimates the cost of the cheapest path from n to the goal.
+            // - it never overestimates the actual cost to get to the goal
+            //
+            // A* must examine all equally meritorious paths to find the optimal path.
+
+            match best_path {
+                Some(i) => {
+                    if (new_path_length + keys_left as usize) < i {
+                        // if a best path is known, optimize for finding a shorter one
+                        search_space.push(
+                            Search{
+                                maze: new_maze,
+                                index: key,
+                                path_length: new_path_length,
+                                cost: -(keys_left),
+                                depth: current_search.depth + 1,
+                            }
+                        );
+                    }
+                },
+                None => {
+                    // if no best path is known, optimize for finding one
+                    // this is used to prune other branches later
+                    search_space.push(
+                        Search{
+                            maze: new_maze,
+                            index: key,
+                            path_length: new_path_length,
+                            cost: -(keys_left),
+                            depth: current_search.depth + 1,
+                        }
+                    );
+                },
+            }
         }
     }
 
-    return steps;
+    return best_path;
 }
 
 #[test]
