@@ -17,6 +17,24 @@ struct Node {
     index: NodeIndex<DefaultIx>,
 }
 
+impl Node {
+    fn is_alphabetic(&self) -> bool {
+        return self.c.chars().next().unwrap().is_alphabetic();
+    }
+
+    fn is_key(&self) -> bool {
+        return self.is_alphabetic() && (self.c.to_lowercase() == self.c);
+    }
+
+    fn is_door(&self) -> bool {
+        return self.is_alphabetic() && (self.c.to_uppercase() == self.c);
+    }
+
+    fn key_opens(&self, key: &String) -> bool {
+        return self.c.to_lowercase() == *key;
+    }
+}
+
 type DoorNodes = Vec<NodeIndex<DefaultIx>>;
 type KeyNodes = Vec<NodeIndex<DefaultIx>>;
 
@@ -34,12 +52,10 @@ fn visible_doors_and_keys(node_index: NodeIndex<DefaultIx>, graph: &Graph<Node, 
     while !exploration.is_empty() {
         let current_node = graph.node_weight(exploration.pop_front().unwrap()).unwrap();
 
-        if current_node.c.chars().next().unwrap().is_alphabetic() {
-            if current_node.c == current_node.c.to_uppercase() {
-                door_nodes.push(current_node.index);
-            } else if current_node.c == current_node.c.to_lowercase() {
-                key_nodes.push(current_node.index);
-            }
+        if current_node.is_door() {
+            door_nodes.push(current_node.index);
+        } else if current_node.is_key() {
+            key_nodes.push(current_node.index);
         } else {
             for neighbour_index in graph.neighbors(current_node.index) {
                 if !seen.contains(&neighbour_index) {
