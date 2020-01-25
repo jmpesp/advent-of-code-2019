@@ -90,8 +90,6 @@ fn test_visible_doors_and_keys() {
 
 struct Maze {
     graph: StableGraph<Node, usize>,
-    rows: usize,
-    cols: usize,
 }
 
 impl Maze {
@@ -138,15 +136,11 @@ impl Maze {
     fn new() -> Maze {
         return Maze {
             graph: StableGraph::new(),
-            rows: 0,
-            cols: 0
         };
     }
 
     fn clone_from(&mut self, source: &Self) -> &mut Maze {
         self.graph = source.graph.clone();
-        self.rows = source.rows;
-        self.cols = source.cols;
         return self;
     }
 }
@@ -191,8 +185,6 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
 
     let mut maze: Maze = Maze{
         graph: StableGraph::new(),
-        rows: rows,
-        cols: cols,
     };
 
     // add nodes
