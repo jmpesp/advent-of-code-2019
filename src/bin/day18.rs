@@ -525,6 +525,35 @@ fn test_test2() {
     assert_eq!(collect_all(&maze), 86);
 }
 
+#[test]
+fn test_example1() {
+    let raw_map: Vec<Vec<char>> =
+        vec!["########################".chars().collect(),
+             "#...............b.C.D.f#".chars().collect(),
+             "#.######################".chars().collect(),
+             "#.....@.a.B.c.d.A.e.F.g#".chars().collect(),
+             "########################".chars().collect()];
+
+    let maze = get_lines_as_maze(raw_map);
+
+    assert_eq!(collect_all(&maze), 132);
+}
+
+#[test]
+fn test_example3() {
+    let raw_map: Vec<Vec<char>> =
+        vec!["########################".chars().collect(),
+             "#@..............ac.GI.b#".chars().collect(),
+             "###d#e#f################".chars().collect(),
+             "###A#B#C################".chars().collect(),
+             "###g#h#i################".chars().collect(),
+             "########################".chars().collect()];
+
+    let maze = get_lines_as_maze(raw_map);
+
+    assert_eq!(collect_all(&maze), 81);
+}
+
 fn main() {
     let reader = io::stdin();
     let raw_map: Vec<Vec<char>> =
