@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet, VecDeque, BinaryHeap};
 use std::iter::FromIterator;
 use std::cmp::Ordering;
 
-use petgraph::Graph;
+use petgraph::stable_graph::StableGraph;
 use petgraph::graph::{DefaultIx, NodeIndex};
 use petgraph::algo::{dijkstra};
 use petgraph::dot::{Dot, Config};
@@ -41,7 +41,7 @@ type DoorNodes = Vec<NodeIndex<DefaultIx>>;
 type KeyNodes = Vec<NodeIndex<DefaultIx>>;
 
 // return a vector of visible keys from current node
-fn visible_doors_and_keys(node_index: NodeIndex<DefaultIx>, graph: &Graph<Node, usize>) -> (DoorNodes, KeyNodes) {
+fn visible_doors_and_keys(node_index: NodeIndex<DefaultIx>, graph: &StableGraph<Node, usize>) -> (DoorNodes, KeyNodes) {
     let mut door_nodes: DoorNodes = Vec::new();
     let mut key_nodes: KeyNodes = Vec::new();
 
@@ -83,18 +83,13 @@ fn test_visible_doors_and_keys() {
     let maze = get_lines_as_maze(raw_map);
 
     assert_eq!(
-        visible_doors_and_keys(maze.node_index(1, 1), &maze.graph),
+        visible_doors_and_keys(maze.node_index(6, 3), &maze.graph),
         (vec![], vec![maze.node_index(8, 3), maze.node_index(16, 1)]),
-    );
-
-    assert_eq!(
-        visible_doors_and_keys(maze.node_index(9, 3), &maze.graph),
-        (vec![maze.node_index(10, 3)], vec![maze.node_index(8, 3)]),
     );
 }
 
 struct Maze {
-    graph: Graph<Node, usize>,
+    graph: StableGraph<Node, usize>,
     nodes_map: HashMap<usize, HashMap<usize, NodeIndex<DefaultIx>>>,
     rows: usize,
     cols: usize,
@@ -143,7 +138,7 @@ impl Maze {
 
     fn new() -> Maze {
         return Maze {
-            graph: Graph::new(),
+            graph: StableGraph::new(),
             nodes_map: HashMap::new(),
             rows: 0,
             cols: 0
@@ -236,7 +231,7 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
     println!("{} {}", rows, cols);
 
     let mut maze: Maze = Maze{
-        graph: Graph::new(),
+        graph: StableGraph::new(),
         nodes_map: HashMap::new(),
         rows: rows,
         cols: cols,
@@ -261,7 +256,7 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
         print!("\n");
     }
 
-    for ix in maze.graph.node_indices() {
+    for ix in maze.graph.clone().node_indices() {
         let node = maze.graph.node_weight_mut(ix).unwrap();
         node.index = ix;
 
@@ -326,7 +321,57 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
         }
     }
 
-    // TODO: simplify maze?
+    // simplify maze
+    let mut still_simplifying: bool = true;
+    while still_simplifying {
+        still_simplifying = false;
+
+        // A: "c" <-> B: " " <-> C: "D"
+        //
+        // remove nodes (ex. B) that:
+        // 1. have only two incident edges
+        // 2. are space nodes
+
+        // replace those edges by gluing together both A and C
+        // sum up edge weight
+
+        for ix in maze.graph.clone().node_indices() {
+            let node = maze.graph.node_weight_mut(ix).unwrap();
+
+            if node.c != " " {
+                continue;
+            }
+
+            let mut num_edges: usize = 0;
+            let mut edge_weight: usize = 0;
+            let mut other_nodes: Vec<NodeIndex<DefaultIx>> = Vec::new();
+
+            // because there's no diagonal and this is a maze, there
+            // won't be multiple edges to a neighbor so this works
+            for jx in maze.graph.neighbors(ix) {
+                num_edges += 1;
+                other_nodes.push(jx);
+            }
+
+            for eix in maze.graph.edges(ix) {
+                // edge weight will be the same in either direction
+                edge_weight += *eix.weight();
+            }
+
+            if num_edges == 2 && (other_nodes[0] != other_nodes[1]) {
+                maze.graph.remove_node(ix);
+
+                maze.graph.add_edge(other_nodes[0], other_nodes[1], edge_weight);
+                maze.graph.add_edge(other_nodes[1], other_nodes[0], edge_weight);
+
+                println!("removed {:?}, connected from {:?} to {:?} weight {}",
+                    ix, other_nodes[0], other_nodes[1], edge_weight);
+
+                still_simplifying = true;
+                break;
+            }
+        }
+    }
 
     return maze;
 }
@@ -453,7 +498,7 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
             new_maze.grab(key);
 
             // if I choose something, then open all doors it points to in the whole map
-            for ix in new_maze.graph.node_indices() {
+            for ix in new_maze.graph.clone().node_indices() {
                 let node = new_maze.graph.node_weight(ix).unwrap();
                 if node.is_door() && node.key_opens(&key_node.c) {
                     new_maze.grab(ix);
