@@ -288,6 +288,7 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
         for ix in maze.graph.clone().node_indices() {
             let node = maze.graph.node_weight_mut(ix).unwrap();
 
+            // only prune spaces!
             if node.c != " " {
                 continue;
             }
@@ -316,6 +317,16 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
 
                 println!("removed {:?}, connected from {:?} to {:?} weight {}",
                     ix, other_nodes[0], other_nodes[1], edge_weight);
+
+                still_simplifying = true;
+                break;
+            }
+
+            if num_edges == 1 {
+                // extra: prune leaf nodes that are not special
+                maze.graph.remove_node(ix);
+
+                println!("removed {:?}, was non-special leaf", ix);
 
                 still_simplifying = true;
                 break;
