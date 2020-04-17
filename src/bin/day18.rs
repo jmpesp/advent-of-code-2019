@@ -4,6 +4,7 @@ use std::fs::File;
 use std::collections::{HashMap, HashSet, VecDeque, BinaryHeap};
 use std::iter::FromIterator;
 use std::cmp::Ordering;
+use std::hash::{Hash, Hasher};
 
 use petgraph::stable_graph::StableGraph;
 use petgraph::graph::{DefaultIx, NodeIndex};
@@ -355,7 +356,7 @@ struct Search {
     path_length: usize,
     cost: i32,
     depth: usize,
-    keys: String,
+    keys: HashSet<String>,
 }
 
 impl Ord for Search {
@@ -377,6 +378,31 @@ impl PartialEq for Search {
 }
 
 impl Eq for Search {}
+
+struct SearchState {
+    index: NodeIndex<DefaultIx>,
+    keys: HashSet<String>,
+    path_length: usize,
+}
+impl Hash for SearchState {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        // do not hash path_length
+        state.write_usize(self.index.index());
+        for key in self.keys.clone() {
+            key.hash(state);
+        }
+        state.finish();
+    }
+}
+impl PartialEq for SearchState {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index && self.keys == other.keys
+    }
+}
+impl Eq for SearchState {}
 
 fn collect_all(maze: &Maze) -> usize {
     return collect_all_given(maze).unwrap();
@@ -422,7 +448,7 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
                 path_length: 0,
                 cost: 0,
                 depth: 0,
-                keys: "".to_string(),
+                keys: ["".to_string()].iter().cloned().collect(),
             }
         );
     }
@@ -432,10 +458,33 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
 
     // closed set: if a node has already been examined, then don't re-examine, unless its
     // cost can be lowered
+    let mut closed_set: HashSet<SearchState> = HashSet::new();
 
     while !search_space.is_empty() {
         // pop off best search so far
         let current_search = search_space.pop().unwrap();
+
+        let reached: SearchState = SearchState{
+            index: current_search.index,
+            keys: current_search.keys.clone(),
+            path_length: current_search.path_length,
+        };
+        if closed_set.contains(&reached) {
+            // is our search better?
+            {
+                let already_reached: &SearchState = closed_set.get(&reached).unwrap();
+                if already_reached.path_length <= reached.path_length {
+                    continue;
+                }
+            }
+            // if so, search
+            // this works because already_reached and reached hash to the same thing
+            closed_set.remove(&reached);
+            closed_set.insert(reached);
+        } else {
+            // if new, search
+            closed_set.insert(reached);
+        }
 
         // what can I collect?
         let (_, key_nodes) = visible_doors_and_keys(current_search.index, &current_search.maze.graph);
@@ -538,6 +587,9 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
                         },
                     }
 
+                    let mut new_keys: HashSet<String> = current_search.keys.clone();
+                    new_keys.insert(key_node.c.clone());
+
                     search_space.push(
                         Search{
                             maze: new_maze,
@@ -545,11 +597,14 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
                             path_length: new_path_length,
                             cost: -(cost),
                             depth: current_search.depth + 1,
-                            keys: format!("{}{}", current_search.keys, key_node.c),
+                            keys: new_keys,
                         });
                 },
                 // there is no other key, so the cost after this is zero
                 None => {
+                    let mut new_keys: HashSet<String> = current_search.keys.clone();
+                    new_keys.insert(key_node.c.clone());
+
                     search_space.push(
                         Search{
                             maze: new_maze,
@@ -557,7 +612,7 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
                             path_length: new_path_length,
                             cost: 0,
                             depth: current_search.depth + 1,
-                            keys: format!("{}{}", current_search.keys, key_node.c),
+                            keys: new_keys,
                         });
                 },
             }
