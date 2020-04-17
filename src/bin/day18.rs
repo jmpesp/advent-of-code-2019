@@ -7,7 +7,8 @@ use std::cmp::Ordering;
 
 use petgraph::stable_graph::StableGraph;
 use petgraph::graph::{DefaultIx, NodeIndex};
-use petgraph::algo::{dijkstra};
+use petgraph::algo::{dijkstra, min_spanning_tree};
+use petgraph::data::FromElements;
 use petgraph::dot::{Dot, Config};
 
 
@@ -50,6 +51,17 @@ fn visible_doors_and_keys(node_index: NodeIndex<DefaultIx>, graph: &StableGraph<
     let mut exploration: VecDeque<NodeIndex<DefaultIx>> = VecDeque::new();
     exploration.push_back(node_index);
     seen.insert(node_index);
+
+    {
+        // terminate if a non-legal character is found
+        let node = graph.node_weight(node_index).unwrap();
+
+        if node.c == " ".to_string() || node.c == "@".to_string() || node.c == ".".to_string() {
+        } else {
+            println!("{:?}", node.c);
+            assert_eq!(true, false);
+        }
+    }
 
     while !exploration.is_empty() {
         let current_node = graph.node_weight(exploration.pop_front().unwrap()).unwrap();
@@ -343,6 +355,7 @@ struct Search {
     path_length: usize,
     cost: i32,
     depth: usize,
+    keys: String,
 }
 
 impl Ord for Search {
@@ -369,6 +382,30 @@ fn collect_all(maze: &Maze) -> usize {
     return collect_all_given(maze).unwrap();
 }
 
+fn steps_to_farthest_key(node_index: NodeIndex<DefaultIx>, maze: &Maze) -> Option<usize> {
+    let mut steps: Option<usize> = None;
+
+    for ix in maze.graph.node_indices() {
+        let node = maze.graph.node_weight(ix).unwrap();
+        if node.is_key() {
+            let key_steps = maze.steps(node_index, ix);
+
+            match steps {
+                Some(i) => {
+                    if key_steps > i {
+                        steps = Some(key_steps);
+                    }
+                },
+                None => {
+                    steps = Some(key_steps);
+                },
+            }
+        }
+    }
+
+    return steps;
+}
+
 fn collect_all_given(amaze: &Maze) -> Option<usize> {
 
     // make sure cost is negative - this makes this a min heap
@@ -385,33 +422,20 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
                 path_length: 0,
                 cost: 0,
                 depth: 0,
+                keys: "".to_string(),
             }
         );
     }
+
+    // best total path
     let mut best_path: Option<usize> = None;
+
+    // closed set: if a node has already been examined, then don't re-examine, unless its
+    // cost can be lowered
 
     while !search_space.is_empty() {
         // pop off best search so far
         let current_search = search_space.pop().unwrap();
-
-        // if the best path is known, then ignore items that exceed it
-        match best_path {
-            Some(i) => {
-                /*println!("length {} best {} current {} cost {} depth {}",
-                    search_space.len(),
-                    i,
-                    current_search.path_length,
-                    current_search.cost,
-                    current_search.depth,
-                );*/
-
-                if current_search.path_length >= i {
-                    //println!("!");
-                    continue;
-                }
-            },
-            None => {},
-        }
 
         // what can I collect?
         let (_, key_nodes) = visible_doors_and_keys(current_search.index, &current_search.maze.graph);
@@ -431,18 +455,39 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
             match best_path {
                 Some(i) => {
                     if current_search.path_length < i {
-                        //println!("update {}", current_search.path_length);
+                        println!("update {}", current_search.path_length);
                         best_path = Some(current_search.path_length);
                     }
                 },
                 None => {
-                    //println!("new {}", current_search.path_length);
+                    println!("new {}", current_search.path_length);
                     best_path = Some(current_search.path_length);
                 },
             }
 
             continue;
         }
+
+        match best_path {
+            Some(i) => {
+                // if the best path is known, then ignore items that are not better
+                if current_search.path_length >= i {
+                    continue;
+                }
+            },
+            None => {},
+        }
+
+        /*
+        println!("length {} current {} cost {} depth {} keys got {} keys left {}",
+            search_space.len(),
+            current_search.path_length,
+            current_search.cost,
+            current_search.depth,
+            current_search.keys,
+            keys_left,
+        );
+        */
 
         for key in key_nodes {
             let key_node = current_search.maze.graph.node_weight(key).unwrap();
@@ -466,34 +511,54 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
             // - it never overestimates the actual cost to get to the goal
             //
             // A* must examine all equally meritorious paths to find the optimal path.
+            let farthest_key: Option<usize> = steps_to_farthest_key(key, &new_maze);
 
-            match best_path {
-                Some(i) => {
-                    if (new_path_length + keys_left as usize) < i {
-                        // if a best path is known, optimize for finding a shorter one
-                        search_space.push(
-                            Search{
-                                maze: new_maze,
-                                index: key,
-                                path_length: new_path_length,
-                                cost: -(keys_left),
-                                depth: current_search.depth + 1,
+            match farthest_key {
+                // there is some key still to get
+                Some(_) => {
+                    let cost: i32;
+
+                    match best_path {
+                        Some(i) => {
+                            // the best possible path must be better to count (hence >=)
+                            // note there might be a key along the way
+                            if (new_path_length as i32 + farthest_key.unwrap() as i32) >= i as i32 {
+                                continue;
                             }
-                        );
+
+                            // bfs to explore search space
+                            //cost = farthest_key.unwrap() as i32;
+
+                            // dfs
+                            cost = keys_left;
+                        },
+                        None => {
+                            // if no best path exists, dfs to find one
+                            cost = keys_left;
+                        },
                     }
-                },
-                None => {
-                    // if no best path is known, optimize for finding one
-                    // this is used to prune other branches later
+
                     search_space.push(
                         Search{
                             maze: new_maze,
                             index: key,
                             path_length: new_path_length,
-                            cost: -(keys_left),
+                            cost: -(cost),
                             depth: current_search.depth + 1,
-                        }
-                    );
+                            keys: format!("{}{}", current_search.keys, key_node.c),
+                        });
+                },
+                // there is no other key, so the cost after this is zero
+                None => {
+                    search_space.push(
+                        Search{
+                            maze: new_maze,
+                            index: key,
+                            path_length: new_path_length,
+                            cost: 0,
+                            depth: current_search.depth + 1,
+                            keys: format!("{}{}", current_search.keys, key_node.c),
+                        });
                 },
             }
         }
@@ -567,7 +632,7 @@ fn main() {
 
     let maze = get_lines_as_maze(raw_map);
 
-    let text = format!("{:?}", Dot::with_config(&maze.graph, &[Config::EdgeNoLabel]));
+    let text = format!("{:?}", Dot::with_config(&maze.graph, &[]));
     println!("{}", text);
 
     let mut file = File::create("graph.dot").expect("failed to create graph.dot");
