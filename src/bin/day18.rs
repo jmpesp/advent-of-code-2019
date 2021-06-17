@@ -1,17 +1,16 @@
-use std::io::{self, BufRead, Write};
 use std::fs::File;
+use std::io::{self, BufRead, Write};
 
-use std::collections::{HashMap, HashSet, VecDeque, BinaryHeap};
-use std::iter::FromIterator;
 use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
+use std::iter::FromIterator;
 
-use petgraph::stable_graph::StableGraph;
-use petgraph::graph::{DefaultIx, NodeIndex};
 use petgraph::algo::{dijkstra, min_spanning_tree};
 use petgraph::data::FromElements;
-use petgraph::dot::{Dot, Config};
-
+use petgraph::dot::{Config, Dot};
+use petgraph::graph::{DefaultIx, NodeIndex};
+use petgraph::stable_graph::StableGraph;
 
 #[derive(Debug, Clone)]
 struct Node {
@@ -43,7 +42,10 @@ type DoorNodes = Vec<NodeIndex<DefaultIx>>;
 type KeyNodes = Vec<NodeIndex<DefaultIx>>;
 
 // return a vector of visible keys from current node
-fn visible_doors_and_keys(node_index: NodeIndex<DefaultIx>, graph: &StableGraph<Node, usize>) -> (DoorNodes, KeyNodes) {
+fn visible_doors_and_keys(
+    node_index: NodeIndex<DefaultIx>,
+    graph: &StableGraph<Node, usize>,
+) -> (DoorNodes, KeyNodes) {
     let mut door_nodes: DoorNodes = Vec::new();
     let mut key_nodes: KeyNodes = Vec::new();
 
@@ -86,18 +88,25 @@ fn visible_doors_and_keys(node_index: NodeIndex<DefaultIx>, graph: &StableGraph<
 
 #[test]
 fn test_visible_doors_and_keys() {
-    let raw_map: Vec<Vec<char>> =
-        vec!["########################".chars().collect(),
-             "#...............b.C.D.f#".chars().collect(),
-             "#.######################".chars().collect(),
-             "#.....@.a.B.c.d.A.e.F.g#".chars().collect(),
-             "########################".chars().collect()];
+    let raw_map: Vec<Vec<char>> = vec![
+        "########################".chars().collect(),
+        "#...............b.C.D.f#".chars().collect(),
+        "#.######################".chars().collect(),
+        "#.....@.a.B.c.d.A.e.F.g#".chars().collect(),
+        "########################".chars().collect(),
+    ];
 
     let maze = get_lines_as_maze(raw_map);
 
     assert_eq!(
         visible_doors_and_keys(maze.node_index("@".to_string()).unwrap(), &maze.graph),
-        (vec![], vec![maze.node_index("a".to_string()).unwrap(), maze.node_index("b".to_string()).unwrap()]),
+        (
+            vec![],
+            vec![
+                maze.node_index("a".to_string()).unwrap(),
+                maze.node_index("b".to_string()).unwrap()
+            ]
+        ),
     );
 }
 
@@ -113,7 +122,7 @@ impl Maze {
                 return Some(node.index);
             }
         }
-        return None
+        return None;
     }
 
     fn letters(&self, v: Vec<NodeIndex<DefaultIx>>) -> HashSet<String> {
@@ -160,29 +169,30 @@ impl Maze {
 
 #[test]
 fn test_letters() {
-    let raw_map_2: Vec<Vec<char>> =
-        vec!["#################".chars().collect(),
-             "#i.G..c...e..H.p#".chars().collect(),
-             "########.########".chars().collect(),
-             "#j.A..b...f..D.o#".chars().collect(),
-             "########@########".chars().collect(),
-             "#k.E..a...g..B.n#".chars().collect(),
-             "########.########".chars().collect(),
-             "#l.F..d...h..C.m#".chars().collect(),
-             "#################".chars().collect()];
+    let raw_map_2: Vec<Vec<char>> = vec![
+        "#################".chars().collect(),
+        "#i.G..c...e..H.p#".chars().collect(),
+        "########.########".chars().collect(),
+        "#j.A..b...f..D.o#".chars().collect(),
+        "########@########".chars().collect(),
+        "#k.E..a...g..B.n#".chars().collect(),
+        "########.########".chars().collect(),
+        "#l.F..d...h..C.m#".chars().collect(),
+        "#################".chars().collect(),
+    ];
 
     let maze_2 = get_lines_as_maze(raw_map_2);
 
-    let (door_nodes, key_nodes) = visible_doors_and_keys(maze_2.node_index("@".to_string()).unwrap(), &maze_2.graph);
+    let (door_nodes, key_nodes) =
+        visible_doors_and_keys(maze_2.node_index("@".to_string()).unwrap(), &maze_2.graph);
 
     assert_eq!(DoorNodes::new(), door_nodes);
 
-    let expected_key_nodes: HashSet<String> =
-        HashSet::from_iter(
-            vec!["a", "b", "c", "d", "e", "f", "g", "h"]
-                .iter()
-                .map(|s| s.to_string())
-        );
+    let expected_key_nodes: HashSet<String> = HashSet::from_iter(
+        vec!["a", "b", "c", "d", "e", "f", "g", "h"]
+            .iter()
+            .map(|s| s.to_string()),
+    );
 
     assert_eq!(maze_2.letters(key_nodes), expected_key_nodes);
 }
@@ -196,17 +206,17 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
 
     println!("{} {}", rows, cols);
 
-    let mut maze: Maze = Maze{
+    let mut maze: Maze = Maze {
         graph: StableGraph::new(),
     };
 
     // add nodes
-    for y in 1..(rows-1) {
-        for x in 1..(cols-1) {
+    for y in 1..(rows - 1) {
+        for x in 1..(cols - 1) {
             let point = raw_map[y][x];
 
             if point != '#' {
-                maze.graph.add_node(Node{
+                maze.graph.add_node(Node {
                     x: x,
                     y: y,
                     c: point.to_string(),
@@ -228,22 +238,26 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
         }
 
         nodes_map.entry(node.y).or_insert(HashMap::new());
-        nodes_map.get_mut(&node.y).unwrap().entry(node.x).or_insert(ix);
+        nodes_map
+            .get_mut(&node.y)
+            .unwrap()
+            .entry(node.x)
+            .or_insert(ix);
 
         println!("y {} x {} {:?}", node.y, node.x, node);
     }
 
     // add edges
-    for y in 1..(rows-1) {
-        for x in 1..(cols-1) {
+    for y in 1..(rows - 1) {
+        for x in 1..(cols - 1) {
             let point = raw_map[y][x];
-            let north = raw_map[y-1][x];
-            let south = raw_map[y+1][x];
-            let west = raw_map[y][x-1];
-            let east = raw_map[y][x+1];
+            let north = raw_map[y - 1][x];
+            let south = raw_map[y + 1][x];
+            let west = raw_map[y][x - 1];
+            let east = raw_map[y][x + 1];
 
             if point == '#' {
-                continue
+                continue;
             }
 
             println!(" {} ", north);
@@ -254,29 +268,29 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
                 println!("y {} x {} N", y, x);
                 maze.graph.add_edge(
                     *nodes_map.get(&y).unwrap().get(&x).unwrap(),
-                    *nodes_map.get(&(y-1)).unwrap().get(&x).unwrap(),
-                    1
+                    *nodes_map.get(&(y - 1)).unwrap().get(&x).unwrap(),
+                    1,
                 );
             }
             if south != '#' {
                 maze.graph.add_edge(
                     *nodes_map.get(&y).unwrap().get(&x).unwrap(),
-                    *nodes_map.get(&(y+1)).unwrap().get(&x).unwrap(),
-                    1
+                    *nodes_map.get(&(y + 1)).unwrap().get(&x).unwrap(),
+                    1,
                 );
             }
             if west != '#' {
                 maze.graph.add_edge(
                     *nodes_map.get(&y).unwrap().get(&x).unwrap(),
-                    *nodes_map.get(&y).unwrap().get(&(x-1)).unwrap(),
-                    1
+                    *nodes_map.get(&y).unwrap().get(&(x - 1)).unwrap(),
+                    1,
                 );
             }
             if east != '#' {
                 maze.graph.add_edge(
                     *nodes_map.get(&y).unwrap().get(&x).unwrap(),
-                    *nodes_map.get(&y).unwrap().get(&(x+1)).unwrap(),
-                    1
+                    *nodes_map.get(&y).unwrap().get(&(x + 1)).unwrap(),
+                    1,
                 );
             }
 
@@ -325,11 +339,15 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
             if num_edges == 2 && (other_nodes[0] != other_nodes[1]) {
                 maze.graph.remove_node(ix);
 
-                maze.graph.add_edge(other_nodes[0], other_nodes[1], edge_weight);
-                maze.graph.add_edge(other_nodes[1], other_nodes[0], edge_weight);
+                maze.graph
+                    .add_edge(other_nodes[0], other_nodes[1], edge_weight);
+                maze.graph
+                    .add_edge(other_nodes[1], other_nodes[0], edge_weight);
 
-                println!("removed {:?}, connected from {:?} to {:?} weight {}",
-                    ix, other_nodes[0], other_nodes[1], edge_weight);
+                println!(
+                    "removed {:?}, connected from {:?} to {:?} weight {}",
+                    ix, other_nodes[0], other_nodes[1], edge_weight
+                );
 
                 still_simplifying = true;
                 break;
@@ -421,10 +439,10 @@ fn steps_to_farthest_key(node_index: NodeIndex<DefaultIx>, maze: &Maze) -> Optio
                     if key_steps > i {
                         steps = Some(key_steps);
                     }
-                },
+                }
                 None => {
                     steps = Some(key_steps);
-                },
+                }
             }
         }
     }
@@ -433,7 +451,6 @@ fn steps_to_farthest_key(node_index: NodeIndex<DefaultIx>, maze: &Maze) -> Optio
 }
 
 fn collect_all_given(amaze: &Maze) -> Option<usize> {
-
     // make sure cost is negative - this makes this a min heap
     let mut search_space: BinaryHeap<Search> = BinaryHeap::new();
 
@@ -441,16 +458,14 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
         let mut new_maze: Maze = Maze::new();
         new_maze.clone_from(amaze);
 
-        search_space.push(
-            Search{
-                maze: new_maze,
-                index: amaze.find_start_index(),
-                path_length: 0,
-                cost: 0,
-                depth: 0,
-                keys: ["".to_string()].iter().cloned().collect(),
-            }
-        );
+        search_space.push(Search {
+            maze: new_maze,
+            index: amaze.find_start_index(),
+            path_length: 0,
+            cost: 0,
+            depth: 0,
+            keys: ["".to_string()].iter().cloned().collect(),
+        });
     }
 
     // best total path
@@ -464,7 +479,7 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
         // pop off best search so far
         let current_search = search_space.pop().unwrap();
 
-        let reached: SearchState = SearchState{
+        let reached: SearchState = SearchState {
             index: current_search.index,
             keys: current_search.keys.clone(),
             path_length: current_search.path_length,
@@ -487,7 +502,8 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
         }
 
         // what can I collect?
-        let (_, key_nodes) = visible_doors_and_keys(current_search.index, &current_search.maze.graph);
+        let (_, key_nodes) =
+            visible_doors_and_keys(current_search.index, &current_search.maze.graph);
 
         // BUT are there any keys left in the maze?
         let mut keys_left: i32 = 0;
@@ -507,11 +523,11 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
                         println!("update {}", current_search.path_length);
                         best_path = Some(current_search.path_length);
                     }
-                },
+                }
                 None => {
                     println!("new {}", current_search.path_length);
                     best_path = Some(current_search.path_length);
-                },
+                }
             }
 
             continue;
@@ -523,8 +539,8 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
                 if current_search.path_length >= i {
                     continue;
                 }
-            },
-            None => {},
+            }
+            None => {}
         }
 
         /*
@@ -554,7 +570,8 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
                 }
             }
 
-            let new_path_length = current_search.path_length + current_search.maze.steps(current_search.index, key);
+            let new_path_length =
+                current_search.path_length + current_search.maze.steps(current_search.index, key);
 
             // a heuristic function that estimates the cost of the cheapest path from n to the goal.
             // - it never overestimates the actual cost to get to the goal
@@ -580,41 +597,39 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
 
                             // dfs
                             cost = keys_left;
-                        },
+                        }
                         None => {
                             // if no best path exists, dfs to find one
                             cost = keys_left;
-                        },
+                        }
                     }
 
                     let mut new_keys: HashSet<String> = current_search.keys.clone();
                     new_keys.insert(key_node.c.clone());
 
-                    search_space.push(
-                        Search{
-                            maze: new_maze,
-                            index: key,
-                            path_length: new_path_length,
-                            cost: -(cost),
-                            depth: current_search.depth + 1,
-                            keys: new_keys,
-                        });
-                },
+                    search_space.push(Search {
+                        maze: new_maze,
+                        index: key,
+                        path_length: new_path_length,
+                        cost: -(cost),
+                        depth: current_search.depth + 1,
+                        keys: new_keys,
+                    });
+                }
                 // there is no other key, so the cost after this is zero
                 None => {
                     let mut new_keys: HashSet<String> = current_search.keys.clone();
                     new_keys.insert(key_node.c.clone());
 
-                    search_space.push(
-                        Search{
-                            maze: new_maze,
-                            index: key,
-                            path_length: new_path_length,
-                            cost: 0,
-                            depth: current_search.depth + 1,
-                            keys: new_keys,
-                        });
-                },
+                    search_space.push(Search {
+                        maze: new_maze,
+                        index: key,
+                        path_length: new_path_length,
+                        cost: 0,
+                        depth: current_search.depth + 1,
+                        keys: new_keys,
+                    });
+                }
             }
         }
     }
@@ -624,10 +639,11 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
 
 #[test]
 fn test_test1() {
-    let raw_map: Vec<Vec<char>> =
-        vec!["#########".chars().collect(),
-             "#b.A.@.a#".chars().collect(),
-             "#########".chars().collect()];
+    let raw_map: Vec<Vec<char>> = vec![
+        "#########".chars().collect(),
+        "#b.A.@.a#".chars().collect(),
+        "#########".chars().collect(),
+    ];
 
     let maze = get_lines_as_maze(raw_map);
 
@@ -636,12 +652,13 @@ fn test_test1() {
 
 #[test]
 fn test_test2() {
-    let raw_map: Vec<Vec<char>> =
-        vec!["########################".chars().collect(),
-             "#f.D.E.e.C.b.A.@.a.B.c.#".chars().collect(),
-             "######################.#".chars().collect(),
-             "#d.....................#".chars().collect(),
-             "########################".chars().collect()];
+    let raw_map: Vec<Vec<char>> = vec![
+        "########################".chars().collect(),
+        "#f.D.E.e.C.b.A.@.a.B.c.#".chars().collect(),
+        "######################.#".chars().collect(),
+        "#d.....................#".chars().collect(),
+        "########################".chars().collect(),
+    ];
 
     let maze = get_lines_as_maze(raw_map);
 
@@ -650,12 +667,13 @@ fn test_test2() {
 
 #[test]
 fn test_example1() {
-    let raw_map: Vec<Vec<char>> =
-        vec!["########################".chars().collect(),
-             "#...............b.C.D.f#".chars().collect(),
-             "#.######################".chars().collect(),
-             "#.....@.a.B.c.d.A.e.F.g#".chars().collect(),
-             "########################".chars().collect()];
+    let raw_map: Vec<Vec<char>> = vec![
+        "########################".chars().collect(),
+        "#...............b.C.D.f#".chars().collect(),
+        "#.######################".chars().collect(),
+        "#.....@.a.B.c.d.A.e.F.g#".chars().collect(),
+        "########################".chars().collect(),
+    ];
 
     let maze = get_lines_as_maze(raw_map);
 
@@ -664,13 +682,14 @@ fn test_example1() {
 
 #[test]
 fn test_example3() {
-    let raw_map: Vec<Vec<char>> =
-        vec!["########################".chars().collect(),
-             "#@..............ac.GI.b#".chars().collect(),
-             "###d#e#f################".chars().collect(),
-             "###A#B#C################".chars().collect(),
-             "###g#h#i################".chars().collect(),
-             "########################".chars().collect()];
+    let raw_map: Vec<Vec<char>> = vec![
+        "########################".chars().collect(),
+        "#@..............ac.GI.b#".chars().collect(),
+        "###d#e#f################".chars().collect(),
+        "###A#B#C################".chars().collect(),
+        "###g#h#i################".chars().collect(),
+        "########################".chars().collect(),
+    ];
 
     let maze = get_lines_as_maze(raw_map);
 
@@ -679,11 +698,11 @@ fn test_example3() {
 
 fn main() {
     let reader = io::stdin();
-    let raw_map: Vec<Vec<char>> =
-        reader.lock()
-              .lines()
-              .map(|s| s.unwrap().chars().collect())
-              .collect();
+    let raw_map: Vec<Vec<char>> = reader
+        .lock()
+        .lines()
+        .map(|s| s.unwrap().chars().collect())
+        .collect();
 
     let maze = get_lines_as_maze(raw_map);
 
@@ -691,7 +710,8 @@ fn main() {
     println!("{}", text);
 
     let mut file = File::create("graph.dot").expect("failed to create graph.dot");
-    file.write(&text.into_bytes()).expect("could not write into graph.dot");
+    file.write(&text.into_bytes())
+        .expect("could not write into graph.dot");
 
     println!("{} steps", collect_all(&maze));
 }
