@@ -6,8 +6,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::iter::FromIterator;
 
-use petgraph::algo::{dijkstra, min_spanning_tree};
-use petgraph::data::FromElements;
+use petgraph::algo::dijkstra;
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DefaultIx, NodeIndex};
 use petgraph::stable_graph::StableGraph;
