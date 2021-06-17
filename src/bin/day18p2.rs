@@ -636,63 +636,65 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
     return best_path;
 }
 
-#[test]
-fn test_test1() {
-    let raw_map: Vec<Vec<char>> = vec![
-        "#########".chars().collect(),
-        "#b.A.@.a#".chars().collect(),
-        "#########".chars().collect(),
-    ];
+fn split_into_four_sections(mut raw_map: Vec<Vec<char>>) -> Vec<Vec<char>> {
+    // assumes a square map
+    let rows = raw_map.len();
+    let cols = raw_map[0].len();
 
-    let maze = get_lines_as_maze(raw_map);
+    let mut done = false;
 
-    assert_eq!(collect_all(&maze), 8);
+    for y in 1..(rows - 1) {
+        for x in 1..(cols - 1) {
+            let point = raw_map[y][x];
+            if point == '@' {
+                raw_map[y][x] = '#';
+
+                raw_map[y - 1][x] = '#';
+                raw_map[y + 1][x] = '#';
+                raw_map[y][x - 1] = '#';
+                raw_map[y][x + 1] = '#';
+
+                raw_map[y - 1][x - 1] = '@';
+                raw_map[y - 1][x + 1] = '@';
+                raw_map[y + 1][x - 1] = '@';
+                raw_map[y + 1][x + 1] = '@';
+
+                done = true;
+                break;
+            }
+        }
+
+        if done {
+            break;
+        }
+    }
+
+    return raw_map;
 }
 
 #[test]
-fn test_test2() {
+fn test_split_into_four_sections_1() {
     let raw_map: Vec<Vec<char>> = vec![
-        "########################".chars().collect(),
-        "#f.D.E.e.C.b.A.@.a.B.c.#".chars().collect(),
-        "######################.#".chars().collect(),
-        "#d.....................#".chars().collect(),
-        "########################".chars().collect(),
+        "#######".chars().collect(),
+        "#a.#Cd#".chars().collect(),
+        "##...##".chars().collect(),
+        "##.@.##".chars().collect(),
+        "##...##".chars().collect(),
+        "#cB#Ab#".chars().collect(),
+        "#######".chars().collect(),
     ];
 
-    let maze = get_lines_as_maze(raw_map);
-
-    assert_eq!(collect_all(&maze), 86);
-}
-
-#[test]
-fn test_example1() {
-    let raw_map: Vec<Vec<char>> = vec![
-        "########################".chars().collect(),
-        "#...............b.C.D.f#".chars().collect(),
-        "#.######################".chars().collect(),
-        "#.....@.a.B.c.d.A.e.F.g#".chars().collect(),
-        "########################".chars().collect(),
+    let expected_map: Vec<Vec<char>> = vec![
+        "#######".chars().collect(),
+        "#a.#Cd#".chars().collect(),
+        "##@#@##".chars().collect(),
+        "#######".chars().collect(),
+        "##@#@##".chars().collect(),
+        "#cB#Ab#".chars().collect(),
+        "#######".chars().collect(),
     ];
 
-    let maze = get_lines_as_maze(raw_map);
-
-    assert_eq!(collect_all(&maze), 132);
-}
-
-#[test]
-fn test_example3() {
-    let raw_map: Vec<Vec<char>> = vec![
-        "########################".chars().collect(),
-        "#@..............ac.GI.b#".chars().collect(),
-        "###d#e#f################".chars().collect(),
-        "###A#B#C################".chars().collect(),
-        "###g#h#i################".chars().collect(),
-        "########################".chars().collect(),
-    ];
-
-    let maze = get_lines_as_maze(raw_map);
-
-    assert_eq!(collect_all(&maze), 81);
+    assert_eq!(split_into_four_sections(raw_map), expected_map);
 }
 
 fn main() {
