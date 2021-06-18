@@ -135,6 +135,8 @@ fn cramer_intersection(
     x4: i32,
     y4: i32,
 ) -> Option<Point> {
+    // https://en.wikipedia.org/wiki/Intersection_(Euclidean_geometry)#Two_line_segments
+
     // s(x2-x1) - t(x4-x3) = x3-x1
     // s(y2-y1) - t(y4-y3) = y3-y1
 
@@ -155,8 +157,8 @@ fn cramer_intersection(
     let t = (a1 * c2 - c1 * a2) as f32 / det as f32;
 
     if betweenf32(0.0, s, 1.0) && betweenf32(0.0, t, 1.0) {
-        let x0 = x1 + (s * (x2 - x1) as f32) as i32;
-        let y0 = y1 + (s * (y2 - y1) as f32) as i32;
+        let x0 = x1 + (s * (x2 - x1) as f32).round() as i32;
+        let y0 = y1 + (s * (y2 - y1) as f32).round() as i32;
 
         return Some(Point { x: x0, y: y0 });
     }
@@ -164,8 +166,54 @@ fn cramer_intersection(
     return None;
 }
 
-fn find_intersections(l1: Line, l2: Line) -> Vec<Point> {
-    let mut result: Vec<Point> = Default::default();
+fn point_distance(p1: Point, p2: Point) -> i32 {
+    if p1.x == p2.x {
+        return (p1.y - p2.y).abs();
+    }
+    if p1.y == p2.y {
+        return (p1.x - p2.x).abs();
+    }
+    println!("{:?} {:?}", p1, p2);
+    panic!("bad");
+}
+
+fn sum_steps(points: &Vec<Point>, l: usize) -> i32 {
+    let mut steps: i32 = 0;
+
+    for i in 0..(l - 1) {
+        // how many steps? not distance
+        steps = steps + point_distance(points[i], points[i + 1]);
+    }
+
+    return steps;
+}
+
+#[test]
+fn test_sum_steps_1() {
+    let input: Vec<String> = vec!["R8,U5,L5,D3".to_string()];
+    let lines: Vec<Line> = lines_from_input(input);
+    let mut lines_iter = lines.into_iter();
+    let l1: Line = lines_iter.next().unwrap();
+
+    // 8+5+5+3 = 21
+    let points = line_to_points(l1);
+    assert_eq!(sum_steps(&points, points.len()), 21);
+}
+
+#[test]
+fn test_sum_steps_2() {
+    let input: Vec<String> = vec!["U7,R6,D4,L4".to_string()];
+    let lines: Vec<Line> = lines_from_input(input);
+    let mut lines_iter = lines.into_iter();
+    let l1: Line = lines_iter.next().unwrap();
+
+    // 7+6+4+4 = 21
+    let points = line_to_points(l1);
+    assert_eq!(sum_steps(&points, points.len()), 21);
+}
+
+fn find_steps_to_origin(l1: Line, l2: Line) -> Vec<i32> {
+    let mut result: Vec<i32> = Default::default();
 
     let l1points = line_to_points(l1);
     let l2points = line_to_points(l2);
@@ -177,13 +225,19 @@ fn find_intersections(l1: Line, l2: Line) -> Vec<Point> {
         let p1b = l1points[i1 + 1];
 
         for i2 in 1..(l2points.len() - 1) {
-            // TODO O(n^2), prune some tests?
             let p2a = l2points[i2 + 0];
             let p2b = l2points[i2 + 1];
 
             match cramer_intersection(p1a.x, p1a.y, p1b.x, p1b.y, p2a.x, p2a.y, p2b.x, p2b.y) {
                 Some(p) => {
-                    result.push(p);
+                    // sum both wire's steps to origin
+                    // want to include p1a to p, p2a to p
+                    println!("> {:?} {:?} {:?}", p1a, p2a, p);
+                    let steps_to_origin: i32 = sum_steps(&l1points, i1 + 1)
+                        + sum_steps(&l2points, i2 + 1)
+                        + point_distance(p1a, p)
+                        + point_distance(p2a, p);
+                    result.push(steps_to_origin);
                 }
                 None => {}
             }
@@ -202,7 +256,12 @@ fn find_intersections(l1: Line, l2: Line) -> Vec<Point> {
 
     match cramer_intersection(p1a.x, p1a.y, p1b.x, p1b.y, p2a.x, p2a.y, p2b.x, p2b.y) {
         Some(p) => {
-            result.push(p);
+            // sum both wire's steps to origin
+            let steps_to_origin: i32 = sum_steps(&l1points, i1 + 1)
+                + sum_steps(&l2points, i2 + 1)
+                + point_distance(p1a, p)
+                + point_distance(p2a, p);
+            result.push(steps_to_origin);
         }
         None => {}
     }
@@ -210,23 +269,19 @@ fn find_intersections(l1: Line, l2: Line) -> Vec<Point> {
     return result;
 }
 
-fn manhattan_distance(p: Point) -> usize {
-    return p.x.abs() as usize + p.y.abs() as usize;
-}
+fn minimal_signal_delay(l1: Line, l2: Line) -> i32 {
+    let mut result: Option<i32> = None;
 
-fn find_closest_intersection(l1: Line, l2: Line) -> usize {
-    let mut result: Option<usize> = None;
-
-    for intersection in find_intersections(l1, l2) {
-        let md = manhattan_distance(intersection);
+    for steps_to_origin in find_steps_to_origin(l1, l2) {
+        println!("steps {}", steps_to_origin);
         match result {
             Some(i) => {
-                if md < i {
-                    result = Some(md);
+                if steps_to_origin < i {
+                    result = Some(steps_to_origin);
                 }
             }
             None => {
-                result = Some(md);
+                result = Some(steps_to_origin);
             }
         }
     }
@@ -234,19 +289,19 @@ fn find_closest_intersection(l1: Line, l2: Line) -> usize {
     return result.unwrap();
 }
 
-fn test_harness(sl1: String, sl2: String, expected_length: usize) {
+fn test_harness(sl1: String, sl2: String, expected_delay: i32) {
     let input: Vec<String> = vec![sl1, sl2];
     let lines: Vec<Line> = lines_from_input(input);
     let mut lines_iter = lines.into_iter();
     let l1: Line = lines_iter.next().unwrap();
     let l2: Line = lines_iter.next().unwrap();
 
-    assert_eq!(find_closest_intersection(l1, l2), expected_length);
+    assert_eq!(minimal_signal_delay(l1, l2), expected_delay);
 }
 
 #[test]
 fn test1() {
-    test_harness("R8,U5,L5,D3".to_string(), "U7,R6,D4,L4".to_string(), 6)
+    test_harness("R8,U5,L5,D3".to_string(), "U7,R6,D4,L4".to_string(), 30)
 }
 
 #[test]
@@ -254,8 +309,8 @@ fn test2() {
     test_harness(
         "R75,D30,R83,U83,L12,D49,R71,U7,L72".to_string(),
         "U62,R66,U55,R34,D71,R55,D58,R83".to_string(),
-        159,
-    );
+        610,
+    )
 }
 
 #[test]
@@ -263,7 +318,7 @@ fn test3() {
     test_harness(
         "R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51".to_string(),
         "U98,R91,D20,R16,D67,R40,U7,R15,U6,R7".to_string(),
-        135,
+        410,
     );
 }
 
@@ -281,5 +336,5 @@ fn main() {
     let l1: Line = lines_iter.next().unwrap();
     let l2: Line = lines_iter.next().unwrap();
 
-    println!("{:?}", find_closest_intersection(l1, l2));
+    println!("{:?}", minimal_signal_delay(l1, l2));
 }
