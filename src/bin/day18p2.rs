@@ -135,14 +135,33 @@ impl Maze {
         return output;
     }
 
-    fn find_start_index(&self) -> NodeIndex<DefaultIx> {
-        return self.node_index("@".to_string()).unwrap();
+    fn find_start_indexes(&self) -> [NodeIndex<DefaultIx>; 4] {
+        let mut i = 0;
+        let mut indexes: [NodeIndex<DefaultIx>; 4] = Default::default();
+
+        for node_index in self.graph.node_indices() {
+            let node = self.graph.node_weight(node_index).unwrap();
+            if node.c == "@" {
+                indexes[i] = node.index;
+                i = i + 1;
+            }
+        }
+
+        for k in 0..4 {
+            println!("found index at {:?}", indexes[k])
+        }
+
+        return indexes;
     }
 
-    fn steps(&self, i: NodeIndex<DefaultIx>, j: NodeIndex<DefaultIx>) -> usize {
+    fn steps(&self, i: NodeIndex<DefaultIx>, j: NodeIndex<DefaultIx>) -> Option<usize> {
         let result: HashMap<NodeIndex<DefaultIx>, usize> =
             dijkstra(&self.graph, i, Some(j), |e| *e.weight());
-        return *result.get(&j).unwrap();
+
+        match result.get(&j) {
+            Some(i) => return Some(i.clone()),
+            None => return None,
+        }
     }
 
     fn grab(&mut self, i: NodeIndex<DefaultIx>) -> String {
@@ -369,7 +388,7 @@ fn get_lines_as_maze(raw_map: Vec<Vec<char>>) -> Maze {
 
 struct Search {
     maze: Maze,
-    index: NodeIndex<DefaultIx>,
+    indexes: [NodeIndex<DefaultIx>; 4],
     path_length: usize,
     cost: i32,
     depth: usize,
@@ -397,7 +416,7 @@ impl PartialEq for Search {
 impl Eq for Search {}
 
 struct SearchState {
-    index: NodeIndex<DefaultIx>,
+    indexes: [NodeIndex<DefaultIx>; 4],
     keys: HashSet<String>,
     path_length: usize,
 }
@@ -407,16 +426,21 @@ impl Hash for SearchState {
         H: Hasher,
     {
         // do not hash path_length
-        state.write_usize(self.index.index());
+        state.write_usize(self.indexes[0].index());
+        state.write_usize(self.indexes[1].index());
+        state.write_usize(self.indexes[2].index());
+        state.write_usize(self.indexes[3].index());
+
         for key in self.keys.clone() {
             key.hash(state);
         }
+
         state.finish();
     }
 }
 impl PartialEq for SearchState {
     fn eq(&self, other: &Self) -> bool {
-        self.index == other.index && self.keys == other.keys
+        self.indexes == other.indexes && self.keys == other.keys
     }
 }
 impl Eq for SearchState {}
@@ -433,14 +457,19 @@ fn steps_to_farthest_key(node_index: NodeIndex<DefaultIx>, maze: &Maze) -> Optio
         if node.is_key() {
             let key_steps = maze.steps(node_index, ix);
 
-            match steps {
-                Some(i) => {
-                    if key_steps > i {
-                        steps = Some(key_steps);
+            match key_steps {
+                Some(j) => match steps {
+                    Some(i) => {
+                        if j > i {
+                            steps = Some(j);
+                        }
                     }
-                }
+                    None => {
+                        steps = Some(j);
+                    }
+                },
                 None => {
-                    steps = Some(key_steps);
+                    // nothing to do - key cannot be reached
                 }
             }
         }
@@ -459,7 +488,7 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
 
         search_space.push(Search {
             maze: new_maze,
-            index: amaze.find_start_index(),
+            indexes: amaze.find_start_indexes(),
             path_length: 0,
             cost: 0,
             depth: 0,
@@ -478,11 +507,14 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
         // pop off best search so far
         let current_search = search_space.pop().unwrap();
 
+        println!("searching {}, not done yet", current_search.path_length);
+
         let reached: SearchState = SearchState {
-            index: current_search.index,
+            indexes: current_search.indexes,
             keys: current_search.keys.clone(),
             path_length: current_search.path_length,
         };
+
         if closed_set.contains(&reached) {
             // is our search better?
             {
@@ -499,10 +531,6 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
             // if new, search
             closed_set.insert(reached);
         }
-
-        // what can I collect?
-        let (_, key_nodes) =
-            visible_doors_and_keys(current_search.index, &current_search.maze.graph);
 
         // BUT are there any keys left in the maze?
         let mut keys_left: i32 = 0;
@@ -542,57 +570,92 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
             None => {}
         }
 
-        /*
-        println!("length {} current {} cost {} depth {} keys got {} keys left {}",
-            search_space.len(),
-            current_search.path_length,
-            current_search.cost,
-            current_search.depth,
-            current_search.keys,
-            keys_left,
-        );
-        */
+        // what can I collect?
+        let mut key_nodes: [KeyNodes; 4] = Default::default();
+        for i in 0..4 {
+            let (_, _key_nodes) =
+                visible_doors_and_keys(current_search.indexes[i], &current_search.maze.graph);
+            key_nodes[i] = _key_nodes;
+        }
 
-        for key in key_nodes {
-            let key_node = current_search.maze.graph.node_weight(key).unwrap();
+        // create a search branch for each index's grabbable keys
+        for i in 0..4 {
+            let key_node = &key_nodes[i];
 
-            let mut new_maze: Maze = Maze::new();
-            new_maze.clone_from(&current_search.maze);
+            for key in key_node {
+                let key_node = current_search.maze.graph.node_weight(*key).unwrap();
 
-            new_maze.grab(key);
+                let mut new_maze: Maze = Maze::new();
+                new_maze.clone_from(&current_search.maze);
 
-            // if I choose something, then open all doors it points to in the whole map
-            for ix in new_maze.graph.clone().node_indices() {
-                let node = new_maze.graph.node_weight(ix).unwrap();
-                if node.is_door() && node.key_opens(&key_node.c) {
-                    new_maze.grab(ix);
+                new_maze.grab(*key);
+
+                // if I choose something, then open all doors it points to in the whole map
+                for ix in new_maze.graph.clone().node_indices() {
+                    let node = new_maze.graph.node_weight(ix).unwrap();
+                    if node.is_door() && node.key_opens(&key_node.c) {
+                        new_maze.grab(ix);
+                    }
                 }
-            }
 
-            let new_path_length =
-                current_search.path_length + current_search.maze.steps(current_search.index, key);
+                let new_path_length = current_search.path_length
+                    + current_search
+                        .maze
+                        .steps(current_search.indexes[i], *key)
+                        .unwrap();
 
-            // a heuristic function that estimates the cost of the cheapest path from n to the goal.
-            // - it never overestimates the actual cost to get to the goal
-            //
-            // A* must examine all equally meritorious paths to find the optimal path.
-            let farthest_key: Option<usize> = steps_to_farthest_key(key, &new_maze);
+                let mut new_keys: HashSet<String> = current_search.keys.clone();
+                new_keys.insert(key_node.c.clone());
 
-            match farthest_key {
-                // there is some key still to get
-                Some(_) => {
+                let mut cumulative_farthest_key: usize = 0;
+                let mut new_search_node_indexes: [NodeIndex<DefaultIx>; 4] = Default::default();
+
+                for j in 0..4 {
+                    if i == j {
+                        new_search_node_indexes[j] = *key;
+                    } else {
+                        new_search_node_indexes[j] = current_search.indexes[j];
+                    }
+
+                    // a heuristic function that estimates the cost of the cheapest path from n to the goal.
+                    // - it never overestimates the actual cost to get to the goal
+                    //
+                    // A* must examine all equally meritorious paths to find the optimal path.
+                    let farthest_key: Option<usize> =
+                        steps_to_farthest_key(new_search_node_indexes[j], &new_maze);
+
+                    match farthest_key {
+                        Some(_) => {
+                            cumulative_farthest_key =
+                                cumulative_farthest_key + farthest_key.unwrap();
+                        }
+                        None => {
+                            // no other key for this @
+                        }
+                    }
+                }
+
+                let mut new_search_node = Search {
+                    maze: new_maze,
+                    indexes: new_search_node_indexes,
+                    path_length: new_path_length,
+                    cost: 0, // refine this
+                    depth: current_search.depth + 1,
+                    keys: new_keys,
+                };
+
+                if cumulative_farthest_key > 0 {
+                    // there is some key still to get
                     let cost: i32;
 
                     match best_path {
                         Some(i) => {
                             // the best possible path must be better to count (hence >=)
                             // note there might be a key along the way
-                            if (new_path_length as i32 + farthest_key.unwrap() as i32) >= i as i32 {
+                            if (new_path_length as i32 + cumulative_farthest_key as i32) >= i as i32
+                            {
                                 continue;
                             }
-
-                            // bfs to explore search space
-                            //cost = farthest_key.unwrap() as i32;
 
                             // dfs
                             cost = keys_left;
@@ -603,31 +666,14 @@ fn collect_all_given(amaze: &Maze) -> Option<usize> {
                         }
                     }
 
-                    let mut new_keys: HashSet<String> = current_search.keys.clone();
-                    new_keys.insert(key_node.c.clone());
+                    new_search_node.cost = -(cost);
 
-                    search_space.push(Search {
-                        maze: new_maze,
-                        index: key,
-                        path_length: new_path_length,
-                        cost: -(cost),
-                        depth: current_search.depth + 1,
-                        keys: new_keys,
-                    });
-                }
-                // there is no other key, so the cost after this is zero
-                None => {
-                    let mut new_keys: HashSet<String> = current_search.keys.clone();
-                    new_keys.insert(key_node.c.clone());
+                    search_space.push(new_search_node);
+                } else {
+                    // there is no other key, so the cost after this is zero
+                    new_search_node.cost = 0;
 
-                    search_space.push(Search {
-                        maze: new_maze,
-                        index: key,
-                        path_length: new_path_length,
-                        cost: 0,
-                        depth: current_search.depth + 1,
-                        keys: new_keys,
-                    });
+                    search_space.push(new_search_node);
                 }
             }
         }
@@ -697,6 +743,76 @@ fn test_split_into_four_sections_1() {
     assert_eq!(split_into_four_sections(raw_map), expected_map);
 }
 
+#[test]
+fn test_example1() {
+    let raw_map: Vec<Vec<char>> = vec![
+        "#######".chars().collect(),
+        "#a.#Cd#".chars().collect(),
+        "##...##".chars().collect(),
+        "##.@.##".chars().collect(),
+        "##...##".chars().collect(),
+        "#cB#Ab#".chars().collect(),
+        "#######".chars().collect(),
+    ];
+
+    let maze = get_lines_as_maze(split_into_four_sections(raw_map));
+
+    assert_eq!(collect_all(&maze), 8);
+}
+
+#[test]
+fn test_example2() {
+    let raw_map: Vec<Vec<char>> = vec![
+        "###############".chars().collect(),
+        "#d.ABC.#.....a#".chars().collect(),
+        "######@#@######".chars().collect(),
+        "###############".chars().collect(),
+        "######@#@######".chars().collect(),
+        "#b.....#.....c#".chars().collect(),
+        "###############".chars().collect(),
+    ];
+
+    let maze = get_lines_as_maze(raw_map);
+
+    assert_eq!(collect_all(&maze), 24);
+}
+
+#[test]
+fn test_example3() {
+    let raw_map: Vec<Vec<char>> = vec![
+        "#############".chars().collect(),
+        "#DcBa.#.GhKl#".chars().collect(),
+        "#.###@#@#I###".chars().collect(),
+        "#e#d#####j#k#".chars().collect(),
+        "###C#@#@###J#".chars().collect(),
+        "#fEbA.#.FgHi#".chars().collect(),
+        "#############".chars().collect(),
+    ];
+
+    let maze = get_lines_as_maze(raw_map);
+
+    assert_eq!(collect_all(&maze), 32);
+}
+
+#[test]
+fn test_example4() {
+    let raw_map: Vec<Vec<char>> = vec![
+        "#############".chars().collect(),
+        "#g#f.D#..h#l#".chars().collect(),
+        "#F###e#E###.#".chars().collect(),
+        "#dCba@#@BcIJ#".chars().collect(),
+        "#############".chars().collect(),
+        "#nK.L@#@G...#".chars().collect(),
+        "#M###N#H###.#".chars().collect(),
+        "#o#m..#i#jk.#".chars().collect(),
+        "#############".chars().collect(),
+    ];
+
+    let maze = get_lines_as_maze(raw_map);
+
+    assert_eq!(collect_all(&maze), 72);
+}
+
 fn main() {
     let reader = io::stdin();
     let raw_map: Vec<Vec<char>> = reader
@@ -705,7 +821,7 @@ fn main() {
         .map(|s| s.unwrap().chars().collect())
         .collect();
 
-    let maze = get_lines_as_maze(raw_map);
+    let maze = get_lines_as_maze(split_into_four_sections(raw_map));
 
     let text = format!("{:?}", Dot::with_config(&maze.graph, &[]));
     println!("{}", text);
