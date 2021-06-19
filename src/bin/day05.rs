@@ -142,6 +142,67 @@ fn intcode_program(input: Vec<i32>, ip: i32) -> Vec<i32> {
                 step = 2;
             }
 
+            // Opcode 5 is jump-if-true: if the first parameter is non-zero, it sets the
+            // instruction pointer to the value from the second parameter. Otherwise, it does
+            // nothing.
+            5 => {
+                let i1 = get_value(&output, iptr as usize + 1, param_modes[0]);
+                let i2 = get_value(&output, iptr as usize + 2, param_modes[1]);
+
+                if i1 != 0 {
+                    iptr = i2;
+                    step = 0;
+                } else {
+                    step = 3;
+                }
+            }
+
+            // Opcode 6 is jump-if-false: if the first parameter is zero, it sets the instruction
+            // pointer to the value from the second parameter. Otherwise, it does nothing.
+            6 => {
+                let i1 = get_value(&output, iptr as usize + 1, param_modes[0]);
+                let i2 = get_value(&output, iptr as usize + 2, param_modes[1]);
+
+                if i1 == 0 {
+                    iptr = i2;
+                    step = 0;
+                } else {
+                    step = 3;
+                }
+            }
+
+            // Opcode 7 is less than: if the first parameter is less than the second parameter, it
+            // stores 1 in the position given by the third parameter. Otherwise, it stores 0.
+            7 => {
+                let i1 = get_value(&output, iptr as usize + 1, param_modes[0]);
+                let i2 = get_value(&output, iptr as usize + 2, param_modes[1]);
+                let o1 = output[iptr as usize + 3];
+
+                if i1 < i2 {
+                    output[o1 as usize] = 1;
+                } else {
+                    output[o1 as usize] = 0;
+                }
+
+                step = 4;
+            }
+
+            // Opcode 8 is equals: if the first parameter is equal to the second parameter, it
+            // stores 1 in the position given by the third parameter. Otherwise, it stores 0.
+            8 => {
+                let i1 = get_value(&output, iptr as usize + 1, param_modes[0]);
+                let i2 = get_value(&output, iptr as usize + 2, param_modes[1]);
+                let o1 = output[iptr as usize + 3];
+
+                if i1 == i2 {
+                    output[o1 as usize] = 1;
+                } else {
+                    output[o1 as usize] = 0;
+                }
+
+                step = 4;
+            }
+
             // 99 means that the program is finished
             99 => {
                 // halt!
