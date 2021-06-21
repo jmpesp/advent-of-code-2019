@@ -1,4 +1,3 @@
-use std::cmp;
 use std::fs;
 use std::io::{stdin, stdout, Write};
 use std::sync::mpsc;
@@ -66,18 +65,24 @@ fn get_value(output: &Vec<i32>, iptr: usize, param_mode: ParameterMode) -> i32 {
 struct IntcodeComputer {
     InputSender: mpsc::Sender<i32>,
     OutputReceiver: mpsc::Receiver<i32>,
+    HaltReceiver: mpsc::Receiver<i32>,
     ThreadHandle: thread::JoinHandle<Vec<i32>>,
 }
 
-fn run_intcode_computer(program: Vec<i32>) -> IntcodeComputer {
+fn run_intcode_computer(name: String, program: Vec<i32>) -> IntcodeComputer {
     let (isend, irecv) = mpsc::channel();
     let (osend, orecv) = mpsc::channel();
+    let (hsend, hrecv) = mpsc::channel();
     return IntcodeComputer {
         InputSender: isend,
         OutputReceiver: orecv,
-        ThreadHandle: thread::spawn(move || {
-            return intcode_program(program, 0, irecv, osend);
-        }),
+        HaltReceiver: hrecv,
+        ThreadHandle: thread::Builder::new()
+            .name(name)
+            .spawn(move || {
+                return intcode_program(program, 0, irecv, osend, hsend);
+            })
+            .unwrap(),
     };
 }
 
@@ -89,6 +94,11 @@ impl IntcodeComputer {
     fn recv(&self) -> i32 {
         return self.OutputReceiver.recv().unwrap();
     }
+
+    fn halted(&self) -> bool {
+        // the computer has halted if there's a value here
+        return !self.HaltReceiver.try_recv().is_err();
+    }
 }
 
 fn intcode_program(
@@ -96,6 +106,7 @@ fn intcode_program(
     ip: i32,
     computer_input: mpsc::Receiver<i32>,
     computer_output: mpsc::Sender<i32>,
+    computer_halted: mpsc::Sender<i32>,
 ) -> Vec<i32> {
     let mut output: Vec<i32> = input.clone();
     let mut iptr = ip;
@@ -246,6 +257,7 @@ fn intcode_program(
             // 99 means that the program is finished
             99 => {
                 // halt!
+                computer_halted.send(0);
                 return output;
             }
 
@@ -258,41 +270,12 @@ fn intcode_program(
     }
 }
 
-/*
-#[test]
-fn test_intcode_program() {
-    assert_eq!(
-        intcode_program(vec![1, 0, 0, 0, 99], 0),
-        vec![2, 0, 0, 0, 99]
-    );
-    assert_eq!(
-        intcode_program(vec![2, 3, 0, 3, 99], 0),
-        vec![2, 3, 0, 6, 99]
-    );
-    assert_eq!(
-        intcode_program(vec![2, 4, 4, 5, 99, 0], 0),
-        vec![2, 4, 4, 5, 99, 9801]
-    );
-    assert_eq!(
-        intcode_program(vec![1, 1, 1, 4, 99, 5, 6, 0, 99], 0),
-        vec![30, 1, 1, 4, 2, 5, 6, 0, 99]
-    );
-
-    // from day 5
-    let _ = stdout().flush();
-    assert_eq!(
-        intcode_program(vec![1002, 4, 3, 4, 33], 0),
-        vec![1002, 4, 3, 4, 99]
-    );
-}
-*/
-
 fn run_amplifier_chain(program: Vec<i32>, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32) -> i32 {
-    let ic0 = run_intcode_computer(program.clone());
-    let ic1 = run_intcode_computer(program.clone());
-    let ic2 = run_intcode_computer(program.clone());
-    let ic3 = run_intcode_computer(program.clone());
-    let ic4 = run_intcode_computer(program.clone());
+    let ic0 = run_intcode_computer("ic0".to_string(), program.clone());
+    let ic1 = run_intcode_computer("ic1".to_string(), program.clone());
+    let ic2 = run_intcode_computer("ic2".to_string(), program.clone());
+    let ic3 = run_intcode_computer("ic3".to_string(), program.clone());
+    let ic4 = run_intcode_computer("ic4".to_string(), program.clone());
 
     ic0.send(p1);
     ic1.send(p2);
@@ -351,6 +334,99 @@ fn test_amplifier_programs() {
             2
         ),
         65210
+    );
+}
+
+fn run_amplifier_chain_feedback(
+    program: Vec<i32>,
+    p1: i32,
+    p2: i32,
+    p3: i32,
+    p4: i32,
+    p5: i32,
+) -> i32 {
+    let ic0 = run_intcode_computer("ic0".to_string(), program.clone());
+    let ic1 = run_intcode_computer("ic1".to_string(), program.clone());
+    let ic2 = run_intcode_computer("ic2".to_string(), program.clone());
+    let ic3 = run_intcode_computer("ic3".to_string(), program.clone());
+    let ic4 = run_intcode_computer("ic4".to_string(), program.clone());
+
+    ic0.send(p1);
+    ic1.send(p2);
+    ic2.send(p3);
+    ic3.send(p4);
+    ic4.send(p5);
+
+    ic0.send(0);
+
+    // connect amplifier E to amplifier A's input, run in feedback loop
+    // computers will produce multiple values before halting
+    // Each one should continue receiving and sending signals until it halts
+    let mut last_output_from_last_amplifier: Option<i32> = None;
+
+    loop {
+        if ic1.halted() {
+            return last_output_from_last_amplifier.unwrap();
+        }
+        ic1.send(ic0.recv());
+
+        if ic2.halted() {
+            return last_output_from_last_amplifier.unwrap();
+        }
+        ic2.send(ic1.recv());
+
+        if ic3.halted() {
+            return last_output_from_last_amplifier.unwrap();
+        }
+        ic3.send(ic2.recv());
+
+        if ic4.halted() {
+            return last_output_from_last_amplifier.unwrap();
+        }
+        ic4.send(ic3.recv());
+
+        last_output_from_last_amplifier = Some(ic4.recv());
+
+        if ic0.halted() {
+            return last_output_from_last_amplifier.unwrap();
+        }
+        ic0.send(last_output_from_last_amplifier.unwrap());
+    }
+
+    panic!("end of function!");
+}
+
+#[test]
+fn test_amplifier_with_feedback_programs() {
+    assert_eq!(
+        run_amplifier_chain_feedback(
+            vec![
+                3, 26, 1001, 26, -4, 26, 3, 27, 1002, 27, 2, 27, 1, 27, 26, 27, 4, 27, 1001, 28,
+                -1, 28, 1005, 28, 6, 99, 0, 0, 5
+            ],
+            9,
+            8,
+            7,
+            6,
+            5
+        ),
+        139629729
+    );
+
+    assert_eq!(
+        run_amplifier_chain_feedback(
+            vec![
+                3, 52, 1001, 52, -5, 52, 3, 53, 1, 52, 56, 54, 1007, 54, 5, 55, 1005, 55, 26, 1001,
+                54, -5, 54, 1105, 1, 12, 1, 53, 54, 53, 1008, 54, 0, 55, 1001, 55, 1, 55, 2, 53,
+                55, 53, 4, 53, 1001, 56, -1, 56, 1005, 56, 6, 99, 0, 0, 0, 0, 10
+            ],
+            9,
+            7,
+            8,
+            5,
+            6
+        ),
+        18216
     );
 }
 
@@ -418,10 +494,56 @@ fn main() {
 
     println!("max output is {}", max_output);
 
-    /*
-    let ic0 = run_intcode_computer(numbers.clone());
+    max_output = 0;
 
-    // let output = intcode_program(numbers, 0);
-    ic0.Input.send(
-    */
+    for p1 in 5..10 {
+        for p2 in 5..10 {
+            for p3 in 5..10 {
+                for p4 in 5..10 {
+                    for p5 in 5..10 {
+                        // each phase setting is only used once
+                        let mut bool_array: [bool; 5] = Default::default();
+                        bool_array[p1 - 5] = true;
+                        if bool_array[p2 - 5] {
+                            continue;
+                        }
+                        bool_array[p2 - 5] = true;
+                        if bool_array[p3 - 5] {
+                            continue;
+                        }
+                        bool_array[p3 - 5] = true;
+                        if bool_array[p4 - 5] {
+                            continue;
+                        }
+                        bool_array[p4 - 5] = true;
+                        if bool_array[p5 - 5] {
+                            continue;
+                        }
+                        bool_array[p5 - 5] = true;
+                        for i in 0..5 {
+                            assert!(bool_array[i]);
+                        }
+
+                        let output = run_amplifier_chain_feedback(
+                            numbers.clone(),
+                            p1 as i32,
+                            p2 as i32,
+                            p3 as i32,
+                            p4 as i32,
+                            p5 as i32,
+                        );
+                        if output > max_output {
+                            println!(
+                                "update from {} to {} at {} {} {} {} {}",
+                                max_output, output, p1, p2, p3, p4, p5,
+                            );
+                            max_output = output;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    println!("max output is {}", max_output);
 }
