@@ -761,24 +761,37 @@ fn test_day_5() {
     assert_eq!(7692125, outputs[outputs.len() - 1]);
 }
 
+#[derive(Copy, Clone)]
+enum GridItem {
+    NotSure = 0,
+    Wall,
+    Empty,
+    Oxygen,
+}
+
 struct Grid {
-    panels: HashMap<i32, HashMap<i32, i32>>,
+    panels: HashMap<i32, HashMap<i32, GridItem>>,
 }
 
 impl Grid {
-    fn get(&self, x: i32, y: i32) -> i32 {
+    fn get(&self, x: i32, y: i32) -> GridItem {
         // take care not to create entry if just getting
         if self.panels.contains_key(&x) {
             if self.panels.get(&x).unwrap().contains_key(&y) {
                 return *self.panels.get(&x).unwrap().get(&y).unwrap();
             }
         }
-        return 0;
+        return GridItem::NotSure;
     }
 
-    fn set(&mut self, x: i32, y: i32, v: i32) {
+    fn set(&mut self, x: i32, y: i32, v: GridItem) {
         // only create entry if writing
-        *self.panels.entry(x).or_default().entry(y).or_default() = v;
+        *self
+            .panels
+            .entry(x)
+            .or_default()
+            .entry(y)
+            .or_insert(GridItem::NotSure) = v;
     }
 
     fn num_entries(&self) -> usize {
@@ -792,36 +805,6 @@ impl Grid {
 
         return total_keys;
     }
-}
-
-#[test]
-fn test_grid() {
-    let mut grid = Grid {
-        panels: Default::default(),
-    };
-
-    assert_eq!(grid.num_entries(), 0);
-
-    grid.set(0, 0, 1);
-    assert_eq!(grid.num_entries(), 1);
-
-    grid.set(-1, 0, 0);
-    assert_eq!(grid.num_entries(), 2);
-
-    grid.set(-1, -1, 1);
-    assert_eq!(grid.num_entries(), 3);
-
-    grid.set(0, -1, 1);
-    assert_eq!(grid.num_entries(), 4);
-
-    grid.set(0, 0, 0);
-    assert_eq!(grid.num_entries(), 4);
-
-    grid.set(1, 0, 1);
-    assert_eq!(grid.num_entries(), 5);
-
-    grid.set(1, 1, 1);
-    assert_eq!(grid.num_entries(), 6);
 }
 
 fn display(panels: &Grid, dx: i32, dy: i32) {
@@ -879,19 +862,19 @@ fn display(panels: &Grid, dx: i32, dy: i32) {
             } else {
                 let c = panels.get(x, y);
                 match c {
-                    0 => {
+                    GridItem::NotSure => {
                         // not sure
                         print!(" ");
                     }
-                    1 => {
+                    GridItem::Wall => {
                         // wall
                         print!("#");
                     }
-                    2 => {
+                    GridItem::Empty => {
                         // empty
                         print!(".");
                     }
-                    3 => {
+                    GridItem::Oxygen => {
                         // oxygen!
                         print!("O");
                     }
@@ -905,11 +888,19 @@ fn display(panels: &Grid, dx: i32, dy: i32) {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum NodeStatus {
+    NotSure,
+    Empty,
+    Wall,
+    Oxygen,
+}
+
 #[derive(Debug, Clone)]
 struct Node {
     x: i32,
     y: i32,
-    status: i32,
+    status: NodeStatus,
     index: NodeIndex<DefaultIx>,
 }
 
@@ -926,7 +917,7 @@ impl Map {
         };
     }
 
-    fn add_node(&mut self, x: i32, y: i32, status: i32) {
+    fn add_node(&mut self, x: i32, y: i32, status: NodeStatus) {
         self.graph.add_node(Node {
             x: x,
             y: y,
@@ -954,6 +945,16 @@ impl Map {
         return None;
     }
 
+    fn find_oxygen_node(&self) -> NodeIndex<DefaultIx> {
+        for node_index in self.graph.node_indices() {
+            let node = self.graph.node_weight(node_index).unwrap();
+            if node.status == NodeStatus::Oxygen {
+                return node_index;
+            }
+        }
+        panic!("bad!");
+    }
+
     fn node_exists(&self, x: i32, y: i32) -> bool {
         match self.node_index(x, y) {
             Some(_) => {
@@ -971,6 +972,11 @@ impl Map {
 
     fn get_node_by_index_mut(&mut self, i: NodeIndex<DefaultIx>) -> &mut Node {
         return self.graph.node_weight_mut(i).unwrap();
+    }
+
+    fn update_node(&mut self, x: i32, y: i32, status: NodeStatus) {
+        let index = self.node_index(x, y).unwrap();
+        self.get_node_by_index_mut(index).status = status;
     }
 
     fn remove_edge(&mut self, x1: i32, y1: i32, x2: i32, y2: i32) {
@@ -1071,24 +1077,24 @@ fn main() {
     let mut map: Map = Map::new();
 
     // drone is at (0, 0) - assume that (0,0) is empty
-    map.add_node(dx, dy, 2);
-    panels.set(dx, dy, 2);
+    map.add_node(dx, dy, NodeStatus::Empty);
+    panels.set(dx, dy, GridItem::Empty);
 
     // search in 4 cardinal directions
     search_stack.push((dx - 1, dy));
-    map.add_node(dx - 1, dy, 0);
+    map.add_node(dx - 1, dy, NodeStatus::NotSure);
     map.add_edge(dx, dy, dx - 1, dy);
 
     search_stack.push((dx + 1, dy));
-    map.add_node(dx + 1, dy, 0);
+    map.add_node(dx + 1, dy, NodeStatus::NotSure);
     map.add_edge(dx, dy, dx + 1, dy);
 
     search_stack.push((dx, dy - 1));
-    map.add_node(dx, dy - 1, 0);
+    map.add_node(dx, dy - 1, NodeStatus::NotSure);
     map.add_edge(dx, dy, dx, dy - 1);
 
     search_stack.push((dx, dy + 1));
-    map.add_node(dx, dy + 1, 0);
+    map.add_node(dx, dy + 1, NodeStatus::NotSure);
     map.add_edge(dx, dy, dx, dy + 1);
 
     loop {
@@ -1103,7 +1109,18 @@ fn main() {
 
         // pop off search stack
         println!("{:?}", search_stack);
-        let search_item = search_stack.pop().unwrap();
+        let search_item_option = search_stack.pop();
+        let search_item: (i32, i32);
+        match search_item_option {
+            Some(v) => {
+                search_item = v;
+            }
+            None => {
+                println!("exhausted search stack");
+                break;
+            }
+        }
+
         println!("{} {}, popped {:?}", dx, dy, search_item);
 
         // move there
@@ -1124,7 +1141,7 @@ fn main() {
                 let moves: i32 = 0;
 
                 for movement in movement_path {
-                    let mut movement_node = map.get_node_by_index_mut(movement);
+                    let movement_node = map.get_node_by_index(movement);
                     println!("{} {} movement node is {:?}", dx, dy, movement_node);
 
                     pdx = dx;
@@ -1158,7 +1175,6 @@ fn main() {
                     println!("sending {}", direction);
                     ic.send(direction);
                     status = ic.recv() as i32;
-                    movement_node.status = status;
                     println!("saw {}", status);
                 }
             }
@@ -1170,7 +1186,8 @@ fn main() {
         // the last transition will either pass or fail
         match status {
             0 => {
-                panels.set(dx, dy, 1);
+                panels.set(dx, dy, GridItem::Wall);
+                map.update_node(dx, dy, NodeStatus::Wall);
 
                 // remove edge!
                 map.remove_edge(pdx, pdy, dx, dy);
@@ -1204,48 +1221,107 @@ fn main() {
                 println!("success from {} {} to {} {}", pdx, pdy, dx, dy);
 
                 // if successful, add node to graph (plus edge)
-                panels.set(dx, dy, status);
+                panels.set(dx, dy, GridItem::Empty);
+                map.update_node(dx, dy, NodeStatus::Empty);
 
                 // add more search locations, skip what we've searched before
                 if !map.node_exists(dx - 1, dy) {
                     println!("pushing {} {}", dx - 1, dy);
                     search_stack.push((dx - 1, dy));
-                    map.add_node(dx - 1, dy, 0);
+                    map.add_node(dx - 1, dy, NodeStatus::NotSure);
                     map.add_edge(dx - 1, dy, dx, dy);
                 }
                 if !map.node_exists(dx + 1, dy) {
                     println!("pushing {} {}", dx + 1, dy);
                     search_stack.push((dx + 1, dy));
-                    map.add_node(dx + 1, dy, 0);
+                    map.add_node(dx + 1, dy, NodeStatus::NotSure);
                     map.add_edge(dx + 1, dy, dx, dy);
                 }
                 if !map.node_exists(dx, dy - 1) {
                     println!("pushing {} {}", dx, dy - 1);
                     search_stack.push((dx, dy - 1));
-                    map.add_node(dx, dy - 1, 0);
+                    map.add_node(dx, dy - 1, NodeStatus::NotSure);
                     map.add_edge(dx, dy - 1, dx, dy);
                 }
                 if !map.node_exists(dx, dy + 1) {
                     println!("pushing {} {}", dx, dy + 1);
                     search_stack.push((dx, dy + 1));
-                    map.add_node(dx, dy + 1, 0);
+                    map.add_node(dx, dy + 1, NodeStatus::NotSure);
                     map.add_edge(dx, dy + 1, dx, dy);
                 }
             }
             2 => {
                 // if oxygen, report shortest path to (0,0)
-                panels.set(dx, dy, status);
-                display(&panels, dx, dy);
+                panels.set(dx, dy, GridItem::Oxygen);
+                map.update_node(dx, dy, NodeStatus::Oxygen);
 
                 println!(
                     "shortest path: {}",
                     map.return_shortest_path_length(dx, dy, 0, 0)
                 );
-                return;
+
+                // part 2: make complete map
+                if !map.node_exists(dx - 1, dy) {
+                    println!("pushing {} {}", dx - 1, dy);
+                    search_stack.push((dx - 1, dy));
+                    map.add_node(dx - 1, dy, NodeStatus::NotSure);
+                    map.add_edge(dx - 1, dy, dx, dy);
+                }
+                if !map.node_exists(dx + 1, dy) {
+                    println!("pushing {} {}", dx + 1, dy);
+                    search_stack.push((dx + 1, dy));
+                    map.add_node(dx + 1, dy, NodeStatus::NotSure);
+                    map.add_edge(dx + 1, dy, dx, dy);
+                }
+                if !map.node_exists(dx, dy - 1) {
+                    println!("pushing {} {}", dx, dy - 1);
+                    search_stack.push((dx, dy - 1));
+                    map.add_node(dx, dy - 1, NodeStatus::NotSure);
+                    map.add_edge(dx, dy - 1, dx, dy);
+                }
+                if !map.node_exists(dx, dy + 1) {
+                    println!("pushing {} {}", dx, dy + 1);
+                    search_stack.push((dx, dy + 1));
+                    map.add_node(dx, dy + 1, NodeStatus::NotSure);
+                    map.add_edge(dx, dy + 1, dx, dy);
+                }
             }
             _ => {
                 panic!("bleh");
             }
         }
     }
+
+    println!("checking fill time");
+
+    let mut oxygen_stack: Vec<Vec<NodeIndex<DefaultIx>>> = Vec::new();
+    let mut minutes: i32 = 0;
+
+    oxygen_stack.push(vec![map.find_oxygen_node()]);
+
+    while let Some(node_list) = oxygen_stack.pop() {
+        println!("----------------");
+        display(&panels, dx, dy);
+
+        let mut next_stack: Vec<NodeIndex<DefaultIx>> = Vec::new();
+
+        for node in node_list {
+            let neighbor_indexes: Vec<NodeIndex<DefaultIx>> = map.graph.neighbors(node).collect();
+            for neighbor_index in neighbor_indexes {
+                let neighbor_node = map.get_node_by_index_mut(neighbor_index);
+                if neighbor_node.status == NodeStatus::Empty {
+                    neighbor_node.status = NodeStatus::Oxygen;
+                    panels.set(neighbor_node.x, neighbor_node.y, GridItem::Oxygen);
+                    next_stack.push(neighbor_node.index);
+                }
+            }
+        }
+
+        if next_stack.len() > 0 {
+            oxygen_stack.push(next_stack);
+            minutes += 1;
+        }
+    }
+
+    println!("minutes to fill: {}", minutes);
 }

@@ -5,5 +5,5 @@ authors = ["James MacMahon <jwm@operand.ca>"]
 edition = "2018"
 
 [dependencies]
-petgraph = "0.4.13"
+petgraph = "0.5.1"
 assert = "0.2.1"
