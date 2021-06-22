@@ -1,3 +1,4 @@
+use std::cmp;
 use std::collections::HashMap;
 use std::fs;
 use std::ops::{Index, IndexMut};
@@ -846,6 +847,9 @@ fn main() {
     // After the robot turns, it should always move forward exactly one panel. The robot starts
     // facing up.
 
+    // part 2 - start on white
+    panels.set(x, y, 1);
+
     loop {
         let robot_over_color = panels.get(x, y);
 
@@ -920,4 +924,46 @@ fn main() {
 
     println!("{:?}", panels.panels);
     println!("Panels painted at least once: {}", panels.num_entries());
+
+    let mut min_x: Option<i32> = None;
+    let mut min_y: Option<i32> = None;
+
+    let mut max_x = 0;
+    let mut max_y = 0;
+
+    for (xx, v) in &panels.panels {
+        for (yy, vv) in v {
+            max_x = cmp::max(max_x, *xx);
+            max_y = cmp::max(max_y, *yy);
+
+            match min_x {
+                Some(v) => {
+                    min_x = Some(cmp::min(v, *xx));
+                }
+                None => {
+                    min_x = Some(*xx);
+                }
+            }
+            match min_y {
+                Some(v) => {
+                    min_y = Some(cmp::min(v, *yy));
+                }
+                None => {
+                    min_y = Some(*yy);
+                }
+            }
+        }
+    }
+
+    for y in min_y.unwrap()..(max_y + 1) {
+        for x in min_x.unwrap()..(max_x + 1) {
+            let c = panels.get(x, y);
+            if c == 1 {
+                print!("#");
+            } else {
+                print!(".");
+            }
+        }
+        println!("");
+    }
 }
