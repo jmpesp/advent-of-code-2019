@@ -441,6 +441,7 @@ fn intcode_program(
             }
         }
 
+        /*
         // print modified state
         print!("{} executed {}", iptr, op);
         for i in 0..step {
@@ -448,7 +449,6 @@ fn intcode_program(
         }
         println!("");
 
-        /*
         for (k, _) in &memory.memory {
             if old_memory.memory.contains_key(k) {
                 if old_memory[*k] != memory[*k] {
