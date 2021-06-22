@@ -204,6 +204,8 @@ struct IntcodeComputer {
     InputSender: mpsc::Sender<i64>,
     OutputReceiver: mpsc::Receiver<i64>,
     HaltReceiver: mpsc::Receiver<i64>,
+    WaitReceiver: mpsc::Receiver<i64>,
+    WaitingOnInput: bool,
     ThreadHandle: thread::JoinHandle<Memory>,
 }
 
@@ -211,22 +213,17 @@ fn run_intcode_computer(name: String, program: Vec<i64>) -> IntcodeComputer {
     let (isend, irecv) = mpsc::channel();
     let (osend, orecv) = mpsc::channel();
     let (hsend, hrecv) = mpsc::channel();
+    let (wsend, wrecv) = mpsc::channel();
     return IntcodeComputer {
         InputSender: isend,
         OutputReceiver: orecv,
         HaltReceiver: hrecv,
+        WaitReceiver: wrecv,
+        WaitingOnInput: false,
         ThreadHandle: thread::Builder::new()
             .name(name)
             .spawn(move || {
-                let memory_output = intcode_program(program, 0, irecv, osend, hsend);
-                /*
-                loop {
-                    // wait until all output is drained?
-                    if orecv.try_recv().is_err() {
-                        break;
-                    }
-                }
-                */
+                let memory_output = intcode_program(program, 0, irecv, osend, hsend, wsend);
                 return memory_output;
             })
             .unwrap(),
@@ -234,7 +231,8 @@ fn run_intcode_computer(name: String, program: Vec<i64>) -> IntcodeComputer {
 }
 
 impl IntcodeComputer {
-    fn send(&self, v: i64) {
+    fn send(&mut self, v: i64) {
+        self.WaitingOnInput = false;
         self.InputSender.send(v).expect("unable to send input!");
     }
 
@@ -256,6 +254,20 @@ impl IntcodeComputer {
         }
     }
 
+    fn waiting_on_input(&mut self) -> bool {
+        if self.WaitingOnInput {
+            return true;
+        }
+
+        let result: Result<i64, mpsc::TryRecvError> = self.WaitReceiver.try_recv();
+
+        if !result.is_err() {
+            println!("{:?} wants input!", result);
+            self.WaitingOnInput = true;
+        }
+        return self.WaitingOnInput;
+    }
+
     fn halted(&self) -> bool {
         // the computer has halted if there's a value here
         return !self.HaltReceiver.try_recv().is_err();
@@ -268,6 +280,7 @@ fn intcode_program(
     computer_input: mpsc::Receiver<i64>,
     computer_output: mpsc::Sender<i64>,
     computer_halted: mpsc::Sender<i64>,
+    wait_output: mpsc::Sender<i64>,
 ) -> Memory {
     let mut iptr = ip;
     let mut rbase: i64 = 0;
@@ -336,6 +349,7 @@ fn intcode_program(
             // only parameter. For example, the instruction 3,50 would take an input value and
             // store it at address 50.
             3 => {
+                wait_output.send(0);
                 let i = computer_input.recv().expect("Could not receive!");
 
                 set_value(&mut memory, iptr + 1, param_modes[0], rbase, i);
@@ -473,7 +487,7 @@ fn test_quine() {
     let program = vec![
         109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99,
     ];
-    let ic = run_intcode_computer("ic".to_string(), program.clone());
+    let mut ic = run_intcode_computer("ic".to_string(), program.clone());
     let memory: Memory = ic.ThreadHandle.join().unwrap();
 
     for i in 0..program.len() {
@@ -483,7 +497,7 @@ fn test_quine() {
 
 #[test]
 fn test_16_digit() {
-    let ic = run_intcode_computer(
+    let mut ic = run_intcode_computer(
         "ic".to_string(),
         vec![1102, 34915192, 34915192, 7, 4, 7, 99, 0],
     );
@@ -492,16 +506,16 @@ fn test_16_digit() {
 
 #[test]
 fn test_output_large_middle() {
-    let ic = run_intcode_computer("ic".to_string(), vec![104, 1125899906842624, 99]);
+    let mut ic = run_intcode_computer("ic".to_string(), vec![104, 1125899906842624, 99]);
     assert_eq!(1125899906842624, ic.recv());
 }
 
 fn run_amplifier_chain(program: Vec<i64>, p1: i64, p2: i64, p3: i64, p4: i64, p5: i64) -> i64 {
-    let ic0 = run_intcode_computer("ic0".to_string(), program.clone());
-    let ic1 = run_intcode_computer("ic1".to_string(), program.clone());
-    let ic2 = run_intcode_computer("ic2".to_string(), program.clone());
-    let ic3 = run_intcode_computer("ic3".to_string(), program.clone());
-    let ic4 = run_intcode_computer("ic4".to_string(), program.clone());
+    let mut ic0 = run_intcode_computer("ic0".to_string(), program.clone());
+    let mut ic1 = run_intcode_computer("ic1".to_string(), program.clone());
+    let mut ic2 = run_intcode_computer("ic2".to_string(), program.clone());
+    let mut ic3 = run_intcode_computer("ic3".to_string(), program.clone());
+    let mut ic4 = run_intcode_computer("ic4".to_string(), program.clone());
 
     ic0.send(p1);
     ic1.send(p2);
@@ -571,11 +585,11 @@ fn run_amplifier_chain_feedback(
     p4: i64,
     p5: i64,
 ) -> i64 {
-    let ic0 = run_intcode_computer("ic0".to_string(), program.clone());
-    let ic1 = run_intcode_computer("ic1".to_string(), program.clone());
-    let ic2 = run_intcode_computer("ic2".to_string(), program.clone());
-    let ic3 = run_intcode_computer("ic3".to_string(), program.clone());
-    let ic4 = run_intcode_computer("ic4".to_string(), program.clone());
+    let mut ic0 = run_intcode_computer("ic0".to_string(), program.clone());
+    let mut ic1 = run_intcode_computer("ic1".to_string(), program.clone());
+    let mut ic2 = run_intcode_computer("ic2".to_string(), program.clone());
+    let mut ic3 = run_intcode_computer("ic3".to_string(), program.clone());
+    let mut ic4 = run_intcode_computer("ic4".to_string(), program.clone());
 
     ic0.send(p1);
     ic1.send(p2);
@@ -655,7 +669,7 @@ fn test_amplifier_with_feedback_programs() {
 }
 
 fn run_intcode_computer_and_print(program: Vec<i64>, input: i64) {
-    let ic = run_intcode_computer("ic".to_string(), program.clone());
+    let mut ic = run_intcode_computer("ic".to_string(), program.clone());
 
     ic.send(input);
 
@@ -702,7 +716,7 @@ fn test_day_5() {
         .map(|s| s.parse::<i64>().unwrap())
         .collect();
 
-    let ic = run_intcode_computer("ic".to_string(), program.clone());
+    let mut ic = run_intcode_computer("ic".to_string(), program.clone());
 
     ic.send(1);
 
@@ -812,53 +826,8 @@ fn test_grid() {
     assert_eq!(grid.num_entries(), 6);
 }
 
-fn main() {
-    let contents =
-        fs::read_to_string("day13.input").expect("Something went wrong reading the file!");
-    let program: Vec<i64> = contents
-        .split(",")
-        .map(|s| s.parse::<i64>().unwrap())
-        .collect();
-
-    let mut panels: Grid = Grid {
-        panels: Default::default(),
-    };
-
-    // let's play a game
-    // how about thermonuclear war
-    let ic = run_intcode_computer("ic".to_string(), program.clone());
-
-    loop {
-        if ic.halted() {
-            break;
-        }
-
-        //println!("try x");
-        let x = ic.recv2();
-        if x.is_err() {
-            break;
-        }
-
-        //println!("try y");
-        let y = ic.recv2();
-        if y.is_err() {
-            break;
-        }
-
-        //println!("try tile_id");
-        let tile_id = ic.recv2();
-        if tile_id.is_err() {
-            break;
-        }
-
-        //println!("{} {} {}", x.unwrap(), y.unwrap(), tile_id.unwrap());
-        panels.set(
-            x.unwrap() as i32,
-            y.unwrap() as i32,
-            tile_id.unwrap() as i32,
-        );
-    }
-
+fn display(panels: &Grid) {
+    // display!
     let mut min_x: Option<i32> = None;
     let mut min_y: Option<i32> = None;
 
@@ -886,6 +855,23 @@ fn main() {
                     min_y = Some(*yy);
                 }
             }
+        }
+    }
+
+    match min_x {
+        None => {
+            return;
+        }
+        Some(_) => {
+            // pass
+        }
+    }
+    match min_y {
+        None => {
+            return;
+        }
+        Some(_) => {
+            // pass
         }
     }
 
@@ -917,6 +903,165 @@ fn main() {
         }
         println!("");
     }
+    println!("num blocks: {}", num_block_tiles);
+}
 
-    println!("number of block tiles: {}", num_block_tiles);
+fn main() {
+    let contents =
+        fs::read_to_string("day13.input").expect("Something went wrong reading the file!");
+    let mut program: Vec<i64> = contents
+        .split(",")
+        .map(|s| s.parse::<i64>().unwrap())
+        .collect();
+
+    let mut panels: Grid = Grid {
+        panels: Default::default(),
+    };
+
+    // put in two quarters
+    program[0] = 2;
+
+    // let's play a game
+    // how about thermonuclear war
+    let mut ic = run_intcode_computer("ic".to_string(), program.clone());
+
+    let mut score: Option<i64> = None;
+
+    loop {
+        if ic.halted() {
+            println!("saw halt");
+            // drain output
+            loop {
+                let x = ic.recv2();
+                if x.is_err() {
+                    break;
+                }
+
+                let y = ic.recv2();
+                if y.is_err() {
+                    break;
+                }
+
+                let tile_id = ic.recv2();
+                if tile_id.is_err() {
+                    break;
+                }
+
+                println!("drain {} {} {}", x.unwrap(), y.unwrap(), tile_id.unwrap());
+                if x.unwrap() == -1 && y.unwrap() == 0 {
+                    println!("set score! {}", tile_id.unwrap());
+                    score = Some(tile_id.unwrap());
+                } else {
+                    panels.set(
+                        x.unwrap() as i32,
+                        y.unwrap() as i32,
+                        tile_id.unwrap() as i32,
+                    );
+                }
+
+                display(&panels);
+            }
+            break;
+        }
+
+        loop {
+            let x = ic.try_recv();
+            match x {
+                None => {
+                    break;
+                }
+                Some(_) => {
+                    // pass
+                }
+            }
+
+            let y = ic.recv2();
+            if y.is_err() {
+                break;
+            }
+
+            let tile_id = ic.recv2();
+            if tile_id.is_err() {
+                break;
+            }
+
+            println!("{} {} {}", x.unwrap(), y.unwrap(), tile_id.unwrap());
+            if x.unwrap() == -1 && y.unwrap() == 0 {
+                println!("set score! {}", tile_id.unwrap());
+                score = Some(tile_id.unwrap());
+            } else {
+                panels.set(
+                    x.unwrap() as i32,
+                    y.unwrap() as i32,
+                    tile_id.unwrap() as i32,
+                );
+            }
+        }
+
+        // also have to wait on score being sent, which is the last bit of initial output
+        match score {
+            None => {
+                // pass
+            }
+            Some(v) => {
+                if ic.waiting_on_input() {
+                    let mut ball_position: Option<(i32, i32)> = None;
+                    let mut paddle_position: Option<(i32, i32)> = None;
+
+                    for (xx, v) in &panels.panels {
+                        for (yy, vv) in v {
+                            match vv {
+                                3 => {
+                                    // horizontal paddle
+                                    paddle_position = Some((*xx, *yy));
+                                }
+                                4 => {
+                                    // ball
+                                    ball_position = Some((*xx, *yy));
+                                }
+                                _ => {
+                                    // pass
+                                }
+                            }
+                        }
+                    }
+
+                    match paddle_position {
+                        Some(p) => {
+                            match ball_position {
+                                Some(b) => {
+                                    println!("sending input");
+
+                                    // move paddle toward ball
+                                    if b.0 < p.0 {
+                                        // ball x less than paddle x
+                                        println!("left {:?} {:?}", b, p);
+                                        ic.send(-1);
+                                    } else if b.0 > p.0 {
+                                        println!("right {:?} {:?}", b, p);
+                                        ic.send(1);
+                                    } else {
+                                        println!("none {:?} {:?}", b, p);
+                                        ic.send(0);
+                                    }
+                                }
+                                None => {
+                                    // pass
+                                    //ic.send(0);
+                                }
+                            }
+                        }
+                        None => {
+                            // pass
+                            //ic.send(0);
+                        }
+                    }
+                }
+            }
+        }
+
+        display(&panels);
+    }
+
+    println!("score: {}", score.unwrap());
 }
